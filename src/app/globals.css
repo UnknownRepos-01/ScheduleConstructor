@@ -1,0 +1,166 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: 248 249 252;
+  --bg-secondary: 255 255 255;
+  --bg-tertiary: 241 243 249;
+  --bg-card: 255 255 255;
+  --bg-sidebar: 255 255 255;
+  --bg-input: 244 246 251;
+  --bg-hover: 238 241 248;
+  --bg-active: 232 236 246;
+  --bg-badge: 238 241 248;
+
+  --text-primary: 26 29 46;
+  --text-secondary: 90 97 120;
+  --text-tertiary: 139 145 168;
+  --text-inverse: 255 255 255;
+
+  --border: 226 229 239;
+  --border-light: 238 240 246;
+
+  --accent-primary: 79 110 247;
+  --accent-primary-hover: 61 92 229;
+  --accent-primary-light: 238 241 255;
+  --accent-secondary: 124 92 247;
+
+  --success: 16 185 129;
+  --success-light: 236 253 245;
+  --success-border: 167 243 208;
+  --warning: 245 158 11;
+  --warning-light: 255 251 235;
+  --warning-border: 254 215 170;
+  --danger: 239 68 68;
+  --danger-light: 254 242 242;
+  --danger-border: 254 202 202;
+  --info: 59 130 246;
+  --info-light: 239 246 255;
+  --change-highlight: 254 243 199;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+  --bg-primary: 15 17 23;
+  --bg-secondary: 24 26 36;
+  --bg-tertiary: 30 32 48;
+  --bg-card: 30 32 48;
+  --bg-sidebar: 22 24 35;
+  --bg-input: 37 40 57;
+  --bg-hover: 39 42 61;
+  --bg-active: 47 51 72;
+  --bg-badge: 39 42 61;
+
+  --text-primary: 232 234 240;
+  --text-secondary: 160 165 184;
+  --text-tertiary: 107 112 137;
+  --text-inverse: 15 17 23;
+
+  --border: 42 45 62;
+  --border-light: 35 37 56;
+
+  --accent-primary-light: 30 34 72;
+  --success-light: 13 45 34;
+  --success-border: 6 95 70;
+  --warning-light: 45 32 5;
+  --warning-border: 146 64 14;
+  --danger-light: 45 15 15;
+  --danger-border: 153 27 27;
+  --info-light: 15 29 54;
+  --change-highlight: 61 53 32;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    @apply box-border border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-bg-primary font-sans text-text-primary antialiased transition-colors duration-300;
+  }
+
+  a {
+    @apply text-accent-primary transition-colors duration-150;
+  }
+
+  a:hover {
+    @apply text-accent-primary-hover;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-bold leading-tight text-text-primary;
+  }
+
+  h1 {
+    @apply text-3xl tracking-tight;
+  }
+
+  h2 {
+    @apply text-2xl;
+  }
+
+  h3 {
+    @apply text-xl;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+
+  /* width */
+::-webkit-scrollbar {
+    @apply w-2 h-2
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+    @apply bg-accent-primary-light
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+    @apply bg-accent-primary
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+    @apply bg-accent-secondary
+}
+
+::-webkit-scrollbar-corner {
+  @apply bg-accent-primary-light
+}
+
+}
+
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+  animation: none !important;
+}

@@ -3,9 +3,10 @@
 import { useCallback, useMemo, useState } from "react";
 import type { DragCancelEvent, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { useHotkeys } from "react-hotkeys-hook";
-
 import type { ConstructorCellEntry } from "@/components/schedule/constructor-cell";
+import { formatTeacherShortName, getEntryTeacherIds } from "@/components/schedule/constructor-entry-utils";
 import { createCellDndId, createCellKey, parseCellDndId, parseEntryDndId } from "@/components/schedule/constructor-dnd-utils";
+import { CONSTRUCTOR_TEXT } from "@/components/schedule/constructor-text";
 import type { Classroom, ScheduleEntry, SchedulePayload, Subject, Teacher } from "@/components/schedule/constructor-types";
 
 type UseConstructorDndParams = {
@@ -42,41 +43,49 @@ export function useConstructorDnd({
     if (!activeDragEntryId) return null;
     const entry = scheduleById.get(activeDragEntryId);
     if (!entry) return null;
-    const subjectName = entry.subjectId ? subjectById.get(entry.subjectId)?.name || "" : "";
-    const teacherNames = (entry.teacherIds.length > 0 ? entry.teacherIds : entry.teacherId ? [entry.teacherId] : [])
+
+    const teacherName = getEntryTeacherIds(entry)
       .map((teacherId) => teacherById.get(teacherId))
       .filter(Boolean)
-      .map((teacher) => `${teacher!.surname} ${teacher!.name[0]}.${teacher!.patronymic ? teacher!.patronymic[0] + "." : ""}`);
+      .map((teacher) => formatTeacherShortName(teacher!))
+      .join(", ");
+
     return {
       id: entry.id,
-      subjectName,
-      teacherName: teacherNames.join(", "),
-      classrooms: entry.classroomIds.map((id) => classroomById.get(id)?.number).filter(Boolean) as string[],
+      subjectName: entry.subjectId ? subjectById.get(entry.subjectId)?.name || "" : "",
+      teacherName,
+      classrooms: entry.classroomIds
+        .map((classroomId) => classroomById.get(classroomId)?.number)
+        .filter(Boolean) as string[],
     } satisfies ConstructorCellEntry;
-  }, [activeDragEntryId, scheduleById, subjectById, teacherById, classroomById]);
+  }, [activeDragEntryId, classroomById, scheduleById, subjectById, teacherById]);
 
-  const resolveOverCellId = useCallback(
-    (id: string | number | null | undefined): string | null => {
-      if (!id) return null;
-      const text = String(id);
-      if (text.startsWith("cell:")) return text;
-      const entryId = parseEntryDndId(text);
-      if (!entryId) return null;
-      const entry = scheduleById.get(entryId);
-      if (!entry) return null;
-      return createCellDndId(entry.classId, entry.day, entry.lessonNumber);
+  const resolveOverCellDndId = useCallback(
+    (value: string | number | null | undefined): string | null => {
+      if (!value) return null;
+      const overId = String(value);
+      if (overId.startsWith("cell:")) return overId;
+
+      const overEntryId = parseEntryDndId(overId);
+      if (!overEntryId) return null;
+
+      const overEntry = scheduleById.get(overEntryId);
+      if (!overEntry) return null;
+
+      return createCellDndId(overEntry.classId, overEntry.day, overEntry.lessonNumber);
     },
     [scheduleById],
   );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
-    const entryId = parseEntryDndId(String(event.active.id));
-    setActiveDragEntryId(entryId);
-    const initial = event.active.rect.current.initial;
-    if (initial?.width && initial?.height) {
-      setDragOverlaySize({ width: initial.width, height: initial.height });
+    setActiveDragEntryId(parseEntryDndId(String(event.active.id)));
+
+    const initialRect = event.active.rect.current.initial;
+    if (initialRect?.width && initialRect?.height) {
+      setDragOverlaySize({ width: initialRect.width, height: initialRect.height });
       return;
     }
+
     setDragOverlaySize(null);
   }, []);
 
@@ -90,15 +99,16 @@ export function useConstructorDnd({
       const sourceEntryId = parseEntryDndId(String(event.active.id));
       setActiveDragEntryId(null);
       setDragOverlaySize(null);
+
       if (!sourceEntryId || !selectedListId) return;
 
       const sourceEntry = scheduleById.get(sourceEntryId);
       if (!sourceEntry) return;
 
-      const targetCellDndId = resolveOverCellId(event.over?.id);
-      if (!targetCellDndId) return;
+      const overCellDndId = resolveOverCellDndId(event.over?.id);
+      if (!overCellDndId) return;
 
-      const targetCell = parseCellDndId(targetCellDndId);
+      const targetCell = parseCellDndId(overCellDndId);
       if (!targetCell) return;
 
       const isSameCell =
@@ -107,21 +117,24 @@ export function useConstructorDnd({
         sourceEntry.lessonNumber === targetCell.lessonNumber;
       if (isSameCell) return;
 
-      const duplicateModeFromEvent =
+      const duplicateWithShift =
         event.activatorEvent && "shiftKey" in event.activatorEvent && event.activatorEvent.shiftKey;
-      const shouldDuplicate = isShiftPressed || duplicateModeFromEvent;
+      const shouldDuplicate = isShiftPressed || duplicateWithShift;
 
-      const targetExisting = scheduleByCell.get(createCellKey(targetCell.classId, targetCell.day, targetCell.lessonNumber));
+      const existingTargetEntry = scheduleByCell.get(
+        createCellKey(targetCell.classId, targetCell.day, targetCell.lessonNumber),
+      );
 
       try {
+        const sourceTeacherIds = getEntryTeacherIds(sourceEntry);
         const destinationPayload: SchedulePayload = {
           listId: selectedListId,
           classId: targetCell.classId,
           day: targetCell.day,
           lessonNumber: targetCell.lessonNumber,
           subjectId: sourceEntry.subjectId,
-          teacherId: sourceEntry.teacherId,
-          teacherIds: sourceEntry.teacherIds,
+          teacherId: sourceTeacherIds[0] ?? sourceEntry.teacherId,
+          teacherIds: sourceTeacherIds,
           classroomIds: sourceEntry.classroomIds,
         };
 
@@ -133,24 +146,24 @@ export function useConstructorDnd({
         }
 
         setSchedule((previous) => {
-          let next = previous.filter((item) => {
+          const next = previous.filter((item) => {
             if (!shouldDuplicate && item.id === sourceEntry.id) return false;
-            if (targetExisting && item.id === targetExisting.id) return false;
+            if (existingTargetEntry && item.id === existingTargetEntry.id) return false;
             if (item.id === destinationScheduleId) return false;
-            return true;
+            return !(
+              item.classId === targetCell.classId &&
+              item.day === targetCell.day &&
+              item.lessonNumber === targetCell.lessonNumber
+            );
           });
-          next = next.filter(
-            (item) =>
-              !(item.classId === targetCell.classId && item.day === targetCell.day && item.lessonNumber === targetCell.lessonNumber),
-          );
-          next.push({ ...destinationPayload, id: destinationScheduleId, teacherId: destinationPayload.teacherId ?? null });
-          return next;
+
+          return [...next, { ...destinationPayload, id: destinationScheduleId, teacherId: destinationPayload.teacherId ?? null }];
         });
       } catch (error: any) {
-        alert(error.message || "Не удалось переместить запись");
+        alert(error.message || CONSTRUCTOR_TEXT.scheduleMoveError);
       }
     },
-    [deleteCell, isShiftPressed, resolveOverCellId, scheduleByCell, scheduleById, selectedListId, setSchedule, upsertCell],
+    [deleteCell, isShiftPressed, resolveOverCellDndId, scheduleByCell, scheduleById, selectedListId, setSchedule, upsertCell],
   );
 
   return {

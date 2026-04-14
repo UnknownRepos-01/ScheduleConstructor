@@ -3,6 +3,7 @@
 import { ConstructorGrid } from "@/components/schedule/constructor-grid";
 import { ConstructorLessonModal } from "@/components/schedule/constructor-lesson-modal";
 import { ConstructorListModal } from "@/components/schedule/constructor-list-modal";
+import { CONSTRUCTOR_TEXT } from "@/components/schedule/constructor-text";
 import { ConstructorToolbar } from "@/components/schedule/constructor-toolbar";
 import { useConstructorPageModel } from "@/components/schedule/use-constructor-page-model-composed";
 import { Card } from "@/components/ui/card";
@@ -11,105 +12,115 @@ import { AppIcon } from "@/components/ui/icons";
 import { LoadingState } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 
-export default function ConstructorPageContainer() {
-  const model = useConstructorPageModel();
+function buildSubtitle(
+  saving: boolean,
+  selectedList: { name: string; isActive: boolean } | undefined,
+) {
+  if (saving) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <AppIcon name="saving" className="h-4 w-4" />
+        {CONSTRUCTOR_TEXT.saving}
+      </span>
+    );
+  }
 
-  if (model.loading) {
+  if (!selectedList) return undefined;
+
+  return `${CONSTRUCTOR_TEXT.listLabel}: ${selectedList.name}${
+    selectedList.isActive ? ` (${CONSTRUCTOR_TEXT.listActiveLabel})` : ""
+  }`;
+}
+
+export default function ConstructorPage() {
+  const model = useConstructorPageModel();
+  const subtitle = buildSubtitle(model.status.saving, model.selection.selectedList);
+
+  if (model.status.loading) {
     return <LoadingState />;
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Конструктор расписания"
-        subtitle={
-          model.saving ? (
-            <span className="inline-flex items-center gap-1.5">
-              <AppIcon name="saving" className="h-4 w-4" />
-              Сохранение...
-            </span>
-          ) : model.selectedList ? (
-            `Лист: ${model.selectedList.name}${model.selectedList.isActive ? " (активный)" : ""}`
-          ) : undefined
-        }
-      />
+    <div className="h-[calc(100dvh-74px)] flex flex-col overflow-hidden">
+      <PageHeader title={CONSTRUCTOR_TEXT.pageTitle} subtitle={subtitle} />
 
       <ConstructorToolbar
-        lists={model.lists}
-        selectedListId={model.selectedListId}
-        selectedListIsActive={!!model.selectedList?.isActive}
-        isShiftPressed={model.isShiftPressed}
-        onSelectList={model.setSelectedListId}
-        onActivateList={model.handleActivateList}
-        onCreateList={model.openCreateListModal}
-        onRenameList={model.openRenameListModal}
-        onDuplicateList={model.openDuplicateListModal}
-        onDeleteList={model.handleDeleteList}
+        lists={model.selection.lists}
+        selectedListId={model.selection.selectedListId}
+        selectedListIsActive={!!model.selection.selectedList?.isActive}
+        isShiftPressed={model.selection.isShiftPressed}
+        onSelectList={model.selection.setSelectedListId}
+        onActivateList={model.listActions.handleActivateList}
+        onCreateList={model.listActions.openCreateListModal}
+        onRenameList={model.listActions.openRenameListModal}
+        onDuplicateList={model.listActions.openDuplicateListModal}
+        onDeleteList={model.listActions.handleDeleteList}
       />
 
       <ConstructorListModal
-        isOpen={model.listModalMode !== null}
-        onClose={model.closeListModal}
-        name={model.listModalName}
-        error={model.listModalError}
-        isSubmitting={model.isListModalSubmitting}
-        onNameChange={model.setListModalName}
-        onSubmit={model.handleListModalSubmit}
-        title={model.listModalTitle}
-        submitLabel={model.listModalSubmitLabel}
+        isOpen={model.listModal.isOpen}
+        onClose={model.listModal.onClose}
+        name={model.listModal.name}
+        error={model.listModal.error}
+        isSubmitting={model.listModal.isSubmitting}
+        onNameChange={model.listModal.onNameChange}
+        onSubmit={model.listModal.onSubmit}
+        title={model.listModal.title}
+        submitLabel={model.listModal.submitLabel}
       />
 
       <ConstructorLessonModal
-        isOpen={!!model.activeCell}
-        onClose={model.resetAddLessonModal}
-        title={model.lessonModalTitle}
-        error={model.addLessonError}
-        form={model.addLessonForm}
-        subjects={model.subjectOptions}
-        teacherOptions={model.teacherOptions}
-        classroomOptions={model.classroomOptions}
-        isSubmitting={model.isSubmittingLesson}
-        isTeacherBusy={model.activeCellTeacherBusy}
-        isEditing={model.isEditing}
-        autocompleteLoading={model.autocompleteLoading}
-        teacherSuggestions={model.teacherSuggestions}
-        subjectSuggestions={model.subjectSuggestions}
-        classroomSuggestions={model.classroomSuggestions}
-        onSubmit={model.handleCreateLesson}
-        onSubjectChange={model.onSubjectChange}
-        onToggleTeacher={model.onToggleTeacher}
-        onToggleClassroom={model.onToggleClassroom}
-        onApplyTeacherSuggestion={model.onApplyTeacherSuggestion}
-        onApplyClassroomSuggestion={model.onApplyClassroomSuggestion}
+        isOpen={model.lessonModal.isOpen}
+        onClose={model.lessonModal.onClose}
+        title={model.lessonModal.title}
+        error={model.lessonModal.error}
+        form={model.lessonModal.form}
+        subjects={model.lessonModal.subjects}
+        teacherOptions={model.lessonModal.teacherOptions}
+        classroomOptions={model.lessonModal.classroomOptions}
+        isSubmitting={model.lessonModal.isSubmitting}
+        isTeacherBusy={model.lessonModal.isTeacherBusy}
+        isEditing={model.lessonModal.isEditing}
+        autocompleteLoading={model.lessonModal.autocompleteLoading}
+        teacherSuggestions={model.lessonModal.teacherSuggestions}
+        subjectSuggestions={model.lessonModal.subjectSuggestions}
+        classroomSuggestions={model.lessonModal.classroomSuggestions}
+        onSubmit={model.lessonModal.onSubmit}
+        onSubjectChange={model.lessonModal.onSubjectChange}
+        onToggleTeacher={model.lessonModal.onToggleTeacher}
+        onToggleClassroom={model.lessonModal.onToggleClassroom}
+        onApplyTeacherSuggestion={model.lessonModal.onApplyTeacherSuggestion}
+        onApplyClassroomSuggestion={model.lessonModal.onApplyClassroomSuggestion}
       />
 
-      {!model.selectedListId ? (
+      {!model.selection.selectedListId ? (
         <Card>
-          <EmptyState icon="schedule" title="Выберите или создайте лист расписания" />
+          <EmptyState icon="schedule" title={CONSTRUCTOR_TEXT.emptySelectList} />
         </Card>
-      ) : model.classes.length === 0 ? (
+      ) : model.selection.classes.length === 0 ? (
         <Card>
-          <EmptyState icon="classes" title="Сначала добавьте классы в разделе «Классы»" />
+          <EmptyState icon="classes" title={CONSTRUCTOR_TEXT.emptyAddClasses} />
         </Card>
       ) : (
         <ConstructorGrid
-          classes={model.classes}
-          saving={model.saving}
-          scheduleByCell={model.scheduleByCell}
-          subjectNameById={model.subjectNameById}
-          teacherShortNameById={model.teacherShortNameById}
-          classroomNumberById={model.classroomNumberById}
-          getTeacherBusyCount={model.getTeacherBusyCount}
-          onAddLesson={model.openAddLessonModal}
-          onEditLesson={model.openEditLessonModal}
-          onDeleteLesson={model.handleDeleteFromCellSafely}
-          activeDragEntry={model.activeDragEntry}
-          dragOverlaySize={model.dragOverlaySize}
-          onDragStart={model.handleDragStart}
-          onDragEnd={model.handleDragEnd}
-          onDragCancel={model.handleDragCancel}
+          classes={model.grid.classes}
+          saving={model.status.saving}
+          scheduleByCell={model.grid.scheduleByCell}
+          subjectNameById={model.grid.subjectNameById}
+          teacherShortNameById={model.grid.teacherShortNameById}
+          classroomNumberById={model.grid.classroomNumberById}
+          getTeacherBusyCount={model.grid.getTeacherBusyCount}
+          onAddLesson={model.grid.onAddLesson}
+          onEditLesson={model.grid.onEditLesson}
+          onDeleteLesson={model.grid.onDeleteLesson}
+          activeDragEntry={model.grid.activeDragEntry}
+          dragOverlaySize={model.grid.dragOverlaySize}
+          onDragStart={model.grid.onDragStart}
+          onDragEnd={model.grid.onDragEnd}
+          onDragCancel={model.grid.onDragCancel}
         />
       )}
     </div>
   );
 }
+

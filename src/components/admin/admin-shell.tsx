@@ -55,7 +55,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     <div className="flex min-h-screen bg-bg-primary">
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-[100] flex w-[260px] flex-col border-r border-border bg-bg-sidebar py-5 transition-transform duration-300 md:translate-x-0",
+          "fixed inset-y-0 left-0 z-[100] flex w-[260px] flex-col border-r border-border bg-bg-sidebar py-5 transition-transform duration-300 md:translate-x-0 pb-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -120,7 +120,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </div>
       </aside>
 
-      <main className="min-h-screen flex-1 px-4 py-5 md:ml-[260px] md:px-8 md:py-7">
+      <main className="min-h-screen flex-1 px-4 pt-5 pb-0 md:ml-[260px] md:px-8 md:pt-7 md:pb-0 overflow-auto">
         <div className="mb-4 flex md:hidden">
           <Button size="icon" onClick={() => setSidebarOpen((current) => !current)}>
             <AppIcon name="menu" className="h-5 w-5" />

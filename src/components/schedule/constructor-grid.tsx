@@ -13,6 +13,7 @@ import {
 
 import { ConstructorCell } from "@/components/schedule/constructor-cell";
 import type { ConstructorCellEntry } from "@/components/schedule/constructor-cell";
+import { getEntryTeacherIds } from "@/components/schedule/constructor-entry-utils";
 import { createCellDndId, createCellKey, DAYS, LESSONS } from "@/components/schedule/constructor-dnd-utils";
 import { ConstructorDragOverlay } from "@/components/schedule/constructor-drag-overlay";
 import { CONSTRUCTOR_HEADER_CELL_SIZE_CLASS } from "@/components/schedule/constructor-layout";
@@ -54,7 +55,7 @@ export const ConstructorGrid = React.memo(function ConstructorGrid({
   onDragCancel,
 }: ConstructorGridProps) {
   return (
-    <DndContext 
+    <DndContext
       collisionDetection={(args) => {
         const pointerCollisions = pointerWithin(args);
         return pointerCollisions.length > 0 ? pointerCollisions : closestCenter(args);
@@ -62,10 +63,9 @@ export const ConstructorGrid = React.memo(function ConstructorGrid({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragCancel={onDragCancel}
-      
     >
-      <div className="max-w-[87vw] max-h-[calc(100vh-20vh)] overflow-x-auto rounded-lg border border-border bg-bg-card ">
-        <table className=" border-collapse text-[13px]">
+      <div className="h-[calc(100dvh-168px)] max-w-[100vw] overflow-auto rounded-lg border border-border bg-bg-card">
+        <table className="w-full table-fixed border-collapse text-[13px]">
           <thead>
             <tr>
               <th className="sticky top-0 z-20 w-[70px] border border-border bg-bg-tertiary px-2 py-2 text-center text-xs font-semibold uppercase tracking-[0.04em] text-text-secondary">
@@ -84,6 +84,7 @@ export const ConstructorGrid = React.memo(function ConstructorGrid({
               ))}
             </tr>
           </thead>
+
           <tbody>
             {DAYS.map((day) => (
               <React.Fragment key={day.id}>
@@ -92,44 +93,39 @@ export const ConstructorGrid = React.memo(function ConstructorGrid({
                     {lessonIndex === 0 ? (
                       <td
                         rowSpan={LESSONS.length}
-                        className="sticky min-w-[44px] max-w-[44px] z-10 left-[-1px] border border-border bg-accent-primary-light px-2 py-2 text-center text-[13px] font-bold text-accent-primary [writing-mode:vertical-rl]"
+                        className="sticky left-[-1px] z-10 min-w-[44px] max-w-[60px] border border-border bg-accent-primary-light px-2 py-2 text-center text-[13px] font-bold text-accent-primary [writing-mode:vertical-rl]"
                       >
                         {day.name}
                       </td>
                     ) : null}
-                    <td className="sticky w-10 border left-[43px] z-10 border-border bg-bg-tertiary px-2 py-2 text-center font-semibold text-text-secondary">
+
+                    <td className="sticky left-[43px] z-10 w-10 border border-border bg-bg-tertiary px-2 py-2 text-center font-semibold text-text-secondary">
                       {lessonNumber}
                     </td>
-                    {classes.map((classItem) => {
-                      const cellKey = createCellKey(classItem.id, day.id, lessonNumber);
-                      const cellDndId = createCellDndId(classItem.id, day.id, lessonNumber);
-                      const entry = scheduleByCell.get(cellKey) || null;
 
-                      const entryTeacherIds = entry
-                        ? entry.teacherIds.length > 0
-                          ? entry.teacherIds
-                          : entry.teacherId
-                            ? [entry.teacherId]
-                            : []
-                        : [];
-                      const teacherBusy = entry
-                        ? entryTeacherIds.some(
-                            (teacherId) =>
-                              getTeacherBusyCount(
-                                teacherId,
-                                { classId: classItem.id, day: day.id, lessonNumber },
-                                entry.id,
-                              ) > 0,
-                          )
-                        : false;
+                    {classes.map((classItem) => {
+                      const cell = { classId: classItem.id, day: day.id, lessonNumber };
+                      const cellKey = createCellKey(cell.classId, cell.day, cell.lessonNumber);
+                      const cellDndId = createCellDndId(cell.classId, cell.day, cell.lessonNumber);
+
+                      const entry = scheduleByCell.get(cellKey) || null;
+                      const entryTeacherIds = entry ? getEntryTeacherIds(entry) : [];
+
+                      const teacherBusy =
+                        !!entry &&
+                        entryTeacherIds.some(
+                          (teacherId) => getTeacherBusyCount(teacherId, cell, entry.id) > 0,
+                        );
 
                       const subjectName = entry?.subjectId ? subjectNameById.get(entry.subjectId) || "" : "";
                       const teacherName = entryTeacherIds
                         .map((teacherId) => teacherShortNameById.get(teacherId))
                         .filter(Boolean)
                         .join(", ");
-                      const classroomsText = entry
-                        ? entry.classroomIds.map((id) => classroomNumberById.get(id)).filter(Boolean)
+                      const classrooms = entry
+                        ? entry.classroomIds
+                            .map((classroomId) => classroomNumberById.get(classroomId))
+                            .filter(Boolean)
                         : [];
 
                       return (
@@ -144,14 +140,14 @@ export const ConstructorGrid = React.memo(function ConstructorGrid({
                                   id: entry.id,
                                   subjectName,
                                   teacherName,
-                                  classrooms: classroomsText as string[],
+                                  classrooms: classrooms as string[],
                                 }
                               : null
                           }
-                          onAdd={() => onAddLesson({ classId: classItem.id, day: day.id, lessonNumber })}
+                          onAdd={() => onAddLesson(cell)}
                           onEdit={() => {
                             if (!entry) return;
-                            onEditLesson({ classId: classItem.id, day: day.id, lessonNumber }, entry);
+                            onEditLesson(cell, entry);
                           }}
                           onDelete={() => {
                             if (!entry) return;

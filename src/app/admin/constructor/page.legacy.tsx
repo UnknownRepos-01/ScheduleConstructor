@@ -1,7 +1,7 @@
 ﻿"use client";
 
-export { default } from "@/app/admin/constructor/page";
-/*
+/*export { default } from "@/app/admin/constructor/page";
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   closestCenter,

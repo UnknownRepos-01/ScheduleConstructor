@@ -1,8 +1,19 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  buildClassroomNumberById,
+  buildClassroomOccupancy,
+  buildSubjectNameById,
+  buildTeacherOccupancy,
+  buildTeacherShortNameById,
+  createResourceLoadKey,
+  getEntryTeacherIds,
+  normalizeScheduleEntries,
+} from "@/components/schedule/constructor-entry-utils";
 import { createCellKey } from "@/components/schedule/constructor-dnd-utils";
+import { CONSTRUCTOR_TEXT } from "@/components/schedule/constructor-text";
 import type { ClassItem, Classroom, ListItem, ScheduleEntry, Subject, Teacher } from "@/components/schedule/constructor-types";
 import { useConstructorDnd } from "@/components/schedule/hooks/use-constructor-dnd";
 import { useConstructorLessonEditor } from "@/components/schedule/hooks/use-constructor-lesson-editor";
@@ -18,8 +29,9 @@ import {
   useUpsertScheduleCellMutation,
 } from "@/lib/react-query";
 
-type TeacherLoadMap = Map<string, number>;
-type ClassroomLoadMap = Map<string, number>;
+type IdEntity = { id: number };
+
+const toIdMap = <T extends IdEntity>(items: T[]): Map<number, T> => new Map(items.map((item) => [item.id, item]));
 
 export function useConstructorPageModel() {
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
@@ -50,10 +62,9 @@ export function useConstructorPageModel() {
     (selectedListId !== null && scheduleQuery.isLoading);
 
   useEffect(() => {
-    if (selectedListId !== null) return;
-    if (lists.length === 0) return;
-    const active = lists.find((item) => item.isActive);
-    setSelectedListId(active ? active.id : lists[0].id);
+    if (selectedListId !== null || lists.length === 0) return;
+    const activeList = lists.find((item) => item.isActive);
+    setSelectedListId(activeList ? activeList.id : lists[0].id);
   }, [lists, selectedListId]);
 
   useEffect(() => {
@@ -64,50 +75,19 @@ export function useConstructorPageModel() {
       return;
     }
 
-    const normalized = Array.isArray(scheduleQuery.data)
-      ? scheduleQuery.data.map((entry) => ({
-          ...entry,
-          teacherIds: Array.isArray(entry.teacherIds)
-            ? entry.teacherIds
-            : entry.teacherId
-              ? [entry.teacherId]
-              : [],
-          classroomIds: Array.isArray(entry.classroomIds) ? entry.classroomIds : [],
-        }))
-      : [];
-
-    setSchedule(normalized as ScheduleEntry[]);
+    setSchedule(normalizeScheduleEntries(scheduleQuery.data));
   }, [scheduleQuery.data, selectedListId]);
 
-  const classById = useMemo(() => new Map(classes.map((item) => [item.id, item])), [classes]);
-  const teacherById = useMemo(() => new Map(teachers.map((item) => [item.id, item])), [teachers]);
-  const subjectById = useMemo(() => new Map(subjects.map((item) => [item.id, item])), [subjects]);
-  const classroomById = useMemo(() => new Map(classrooms.map((item) => [item.id, item])), [classrooms]);
+  const classById = useMemo(() => toIdMap(classes), [classes]);
+  const teacherById = useMemo(() => toIdMap(teachers), [teachers]);
+  const subjectById = useMemo(() => toIdMap(subjects), [subjects]);
+  const classroomById = useMemo(() => toIdMap(classrooms), [classrooms]);
 
-  const subjectNameById = useMemo(() => {
-    const map = new Map<number, string>();
-    subjects.forEach((subject) => map.set(subject.id, subject.name));
-    return map;
-  }, [subjects]);
+  const subjectNameById = useMemo(() => buildSubjectNameById(subjects), [subjects]);
+  const teacherShortNameById = useMemo(() => buildTeacherShortNameById(teachers), [teachers]);
+  const classroomNumberById = useMemo(() => buildClassroomNumberById(classrooms), [classrooms]);
 
-  const teacherShortNameById = useMemo(() => {
-    const map = new Map<number, string>();
-    teachers.forEach((teacher) => {
-      map.set(
-        teacher.id,
-        `${teacher.surname} ${teacher.name[0]}.${teacher.patronymic ? teacher.patronymic[0] + "." : ""}`,
-      );
-    });
-    return map;
-  }, [teachers]);
-
-  const classroomNumberById = useMemo(() => {
-    const map = new Map<number, string>();
-    classrooms.forEach((classroom) => map.set(classroom.id, classroom.number));
-    return map;
-  }, [classrooms]);
-
-  const scheduleById = useMemo(() => new Map(schedule.map((entry) => [entry.id, entry])), [schedule]);
+  const scheduleById = useMemo(() => toIdMap(schedule), [schedule]);
   const scheduleByCell = useMemo(() => {
     const map = new Map<string, ScheduleEntry>();
     schedule.forEach((entry) => {
@@ -116,69 +96,57 @@ export function useConstructorPageModel() {
     return map;
   }, [schedule]);
 
-  const teacherOccupancy = useMemo<TeacherLoadMap>(() => {
-    const map = new Map<string, number>();
-    schedule.forEach((entry) => {
-      const teacherIds = entry.teacherIds.length > 0 ? entry.teacherIds : entry.teacherId ? [entry.teacherId] : [];
-      teacherIds.forEach((teacherId) => {
-        const key = `${teacherId}:${entry.day}:${entry.lessonNumber}`;
-        map.set(key, (map.get(key) || 0) + 1);
-      });
-    });
-    return map;
-  }, [schedule]);
+  const teacherOccupancy = useMemo(() => buildTeacherOccupancy(schedule), [schedule]);
+  const classroomOccupancy = useMemo(() => buildClassroomOccupancy(schedule), [schedule]);
 
-  const classroomOccupancy = useMemo<ClassroomLoadMap>(() => {
-    const map = new Map<string, number>();
-    schedule.forEach((entry) => {
-      entry.classroomIds.forEach((classroomId) => {
-        const key = `${classroomId}:${entry.day}:${entry.lessonNumber}`;
-        map.set(key, (map.get(key) || 0) + 1);
-      });
-    });
-    return map;
-  }, [schedule]);
-
-  const selectedList = useMemo(() => lists.find((item) => item.id === selectedListId), [lists, selectedListId]);
+  const selectedList = useMemo(
+    () => lists.find((list) => list.id === selectedListId),
+    [lists, selectedListId],
+  );
 
   const updateScheduleEntryInState = useCallback((entry: ScheduleEntry) => {
     setSchedule((previous) => {
-      const filtered = previous.filter((item) => {
-        if (item.id === entry.id) return false;
-        return !(item.classId === entry.classId && item.day === entry.day && item.lessonNumber === entry.lessonNumber);
-      });
-      return [...filtered, entry];
+      const next = previous.filter(
+        (item) =>
+          item.id !== entry.id &&
+          !(item.classId === entry.classId && item.day === entry.day && item.lessonNumber === entry.lessonNumber),
+      );
+      return [...next, entry];
     });
   }, []);
 
   const getTeacherBusyCount = useCallback(
     (teacherId: number, cell: { day: number; lessonNumber: number }, excludeEntryId?: number) => {
-      const key = `${teacherId}:${cell.day}:${cell.lessonNumber}`;
+      const key = createResourceLoadKey(teacherId, cell.day, cell.lessonNumber);
       const total = teacherOccupancy.get(key) || 0;
       if (!excludeEntryId) return total;
-      const edited = scheduleById.get(excludeEntryId);
-      const shouldExclude =
-        edited &&
-        (edited.teacherIds.includes(teacherId) || edited.teacherId === teacherId) &&
-        edited.day === cell.day &&
-        edited.lessonNumber === cell.lessonNumber;
-      return shouldExclude ? Math.max(0, total - 1) : total;
+
+      const editedEntry = scheduleById.get(excludeEntryId);
+      const shouldExcludeCurrent =
+        !!editedEntry &&
+        getEntryTeacherIds(editedEntry).includes(teacherId) &&
+        editedEntry.day === cell.day &&
+        editedEntry.lessonNumber === cell.lessonNumber;
+
+      return shouldExcludeCurrent ? Math.max(0, total - 1) : total;
     },
     [scheduleById, teacherOccupancy],
   );
 
   const getClassroomBusyCount = useCallback(
     (classroomId: number, cell: { day: number; lessonNumber: number }, excludeEntryId?: number) => {
-      const key = `${classroomId}:${cell.day}:${cell.lessonNumber}`;
+      const key = createResourceLoadKey(classroomId, cell.day, cell.lessonNumber);
       const total = classroomOccupancy.get(key) || 0;
       if (!excludeEntryId) return total;
-      const edited = scheduleById.get(excludeEntryId);
-      const shouldExclude =
-        edited &&
-        edited.classroomIds.includes(classroomId) &&
-        edited.day === cell.day &&
-        edited.lessonNumber === cell.lessonNumber;
-      return shouldExclude ? Math.max(0, total - 1) : total;
+
+      const editedEntry = scheduleById.get(excludeEntryId);
+      const shouldExcludeCurrent =
+        !!editedEntry &&
+        editedEntry.classroomIds.includes(classroomId) &&
+        editedEntry.day === cell.day &&
+        editedEntry.lessonNumber === cell.lessonNumber;
+
+      return shouldExcludeCurrent ? Math.max(0, total - 1) : total;
     },
     [classroomOccupancy, scheduleById],
   );
@@ -194,7 +162,7 @@ export function useConstructorPageModel() {
   const handleDeleteFromCellSafely = useCallback(
     (entry: ScheduleEntry) => {
       handleDeleteFromCell(entry).catch((error: any) => {
-        alert(error.message || "Не удалось удалить запись");
+        alert(error.message || CONSTRUCTOR_TEXT.scheduleDeleteError);
       });
     },
     [handleDeleteFromCell],
@@ -234,64 +202,80 @@ export function useConstructorPageModel() {
     setSchedule,
   });
 
-  const saving = upsertScheduleMutation.isPending || deleteScheduleMutation.isPending || listManagement.listMutationsSaving;
+  const saving =
+    upsertScheduleMutation.isPending ||
+    deleteScheduleMutation.isPending ||
+    listManagement.listMutationsSaving;
 
   return {
-    loading,
-    saving,
-    lists,
-    classes,
-    selectedList,
-    selectedListId,
-    setSelectedListId,
-    isShiftPressed: dnd.isShiftPressed,
-    handleActivateList: listManagement.handleActivateList,
-    openCreateListModal: listManagement.openCreateListModal,
-    openRenameListModal: listManagement.openRenameListModal,
-    openDuplicateListModal: listManagement.openDuplicateListModal,
-    handleDeleteList: listManagement.handleDeleteList,
-    listModalMode: listManagement.listModalMode,
-    closeListModal: listManagement.closeListModal,
-    listModalName: listManagement.listModalName,
-    setListModalName: listManagement.setListModalName,
-    listModalError: listManagement.listModalError,
-    handleListModalSubmit: listManagement.handleListModalSubmit,
-    listModalTitle: listManagement.listModalTitle,
-    listModalSubmitLabel: listManagement.listModalSubmitLabel,
-    isListModalSubmitting: listManagement.isListModalSubmitting,
-    activeCell: lessonEditor.activeCell,
-    resetAddLessonModal: lessonEditor.resetAddLessonModal,
-    lessonModalTitle: lessonEditor.lessonModalTitle,
-    addLessonError: lessonEditor.addLessonError,
-    addLessonForm: lessonEditor.addLessonForm,
-    subjectOptions: lessonEditor.subjectOptions,
-    teacherOptions: lessonEditor.teacherOptions,
-    classroomOptions: lessonEditor.classroomOptions,
-    isSubmittingLesson: lessonEditor.isSubmittingLesson,
-    activeCellTeacherBusy: lessonEditor.activeCellTeacherBusy,
-    isEditing: lessonEditor.isEditing,
-    autocompleteLoading: lessonEditor.autocompleteLoading,
-    teacherSuggestions: lessonEditor.teacherSuggestions,
-    subjectSuggestions: lessonEditor.subjectSuggestions,
-    classroomSuggestions: lessonEditor.classroomSuggestions,
-    handleCreateLesson: lessonEditor.handleCreateLesson,
-    onSubjectChange: lessonEditor.onSubjectChange,
-    onToggleTeacher: lessonEditor.onToggleTeacher,
-    onToggleClassroom: lessonEditor.onToggleClassroom,
-    onApplyTeacherSuggestion: lessonEditor.onApplyTeacherSuggestion,
-    onApplyClassroomSuggestion: lessonEditor.onApplyClassroomSuggestion,
-    openAddLessonModal: lessonEditor.openAddLessonModal,
-    openEditLessonModal: lessonEditor.openEditLessonModal,
-    handleDeleteFromCellSafely,
-    scheduleByCell,
-    subjectNameById,
-    teacherShortNameById,
-    classroomNumberById,
-    getTeacherBusyCount,
-    activeDragEntry: dnd.activeDragEntry,
-    dragOverlaySize: dnd.dragOverlaySize,
-    handleDragStart: dnd.handleDragStart,
-    handleDragEnd: dnd.handleDragEnd,
-    handleDragCancel: dnd.handleDragCancel,
+    status: {
+      loading,
+      saving,
+    },
+    selection: {
+      lists,
+      classes,
+      selectedList,
+      selectedListId,
+      setSelectedListId,
+      isShiftPressed: dnd.isShiftPressed,
+    },
+    listActions: {
+      handleActivateList: listManagement.handleActivateList,
+      openCreateListModal: listManagement.openCreateListModal,
+      openRenameListModal: listManagement.openRenameListModal,
+      openDuplicateListModal: listManagement.openDuplicateListModal,
+      handleDeleteList: listManagement.handleDeleteList,
+    },
+    listModal: {
+      isOpen: listManagement.listModalMode !== null,
+      title: listManagement.listModalTitle,
+      submitLabel: listManagement.listModalSubmitLabel,
+      name: listManagement.listModalName,
+      error: listManagement.listModalError,
+      isSubmitting: listManagement.isListModalSubmitting,
+      onNameChange: listManagement.setListModalName,
+      onSubmit: listManagement.handleListModalSubmit,
+      onClose: listManagement.closeListModal,
+    },
+    lessonModal: {
+      isOpen: !!lessonEditor.activeCell,
+      title: lessonEditor.lessonModalTitle,
+      error: lessonEditor.addLessonError,
+      form: lessonEditor.addLessonForm,
+      subjects: lessonEditor.subjectOptions,
+      teacherOptions: lessonEditor.teacherOptions,
+      classroomOptions: lessonEditor.classroomOptions,
+      isSubmitting: lessonEditor.isSubmittingLesson,
+      isTeacherBusy: lessonEditor.activeCellTeacherBusy,
+      isEditing: lessonEditor.isEditing,
+      autocompleteLoading: lessonEditor.autocompleteLoading,
+      teacherSuggestions: lessonEditor.teacherSuggestions,
+      subjectSuggestions: lessonEditor.subjectSuggestions,
+      classroomSuggestions: lessonEditor.classroomSuggestions,
+      onSubmit: lessonEditor.handleCreateLesson,
+      onSubjectChange: lessonEditor.onSubjectChange,
+      onToggleTeacher: lessonEditor.onToggleTeacher,
+      onToggleClassroom: lessonEditor.onToggleClassroom,
+      onApplyTeacherSuggestion: lessonEditor.onApplyTeacherSuggestion,
+      onApplyClassroomSuggestion: lessonEditor.onApplyClassroomSuggestion,
+      onClose: lessonEditor.resetAddLessonModal,
+    },
+    grid: {
+      classes,
+      scheduleByCell,
+      subjectNameById,
+      teacherShortNameById,
+      classroomNumberById,
+      getTeacherBusyCount,
+      onAddLesson: lessonEditor.openAddLessonModal,
+      onEditLesson: lessonEditor.openEditLessonModal,
+      onDeleteLesson: handleDeleteFromCellSafely,
+      activeDragEntry: dnd.activeDragEntry,
+      dragOverlaySize: dnd.dragOverlaySize,
+      onDragStart: dnd.handleDragStart,
+      onDragEnd: dnd.handleDragEnd,
+      onDragCancel: dnd.handleDragCancel,
+    },
   };
 }

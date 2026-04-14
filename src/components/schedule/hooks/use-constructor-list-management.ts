@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 
+import { CONSTRUCTOR_TEXT } from "@/components/schedule/constructor-text";
 import type { ListItem, ScheduleEntry } from "@/components/schedule/constructor-types";
 import {
   useActivateListMutation,
@@ -10,6 +11,8 @@ import {
   useDuplicateListMutation,
   useUpdateListMutation,
 } from "@/lib/react-query";
+
+type ListModalMode = "create" | "rename" | "duplicate";
 
 type UseConstructorListManagementParams = {
   selectedListId: number | null;
@@ -24,7 +27,7 @@ export function useConstructorListManagement({
   setSelectedListId,
   setSchedule,
 }: UseConstructorListManagementParams) {
-  const [listModalMode, setListModalMode] = useState<"create" | "rename" | "duplicate" | null>(null);
+  const [listModalMode, setListModalMode] = useState<ListModalMode | null>(null);
   const [listModalName, setListModalName] = useState("");
   const [listModalError, setListModalError] = useState<string | null>(null);
 
@@ -34,68 +37,79 @@ export function useConstructorListManagement({
   const duplicateListMutation = useDuplicateListMutation();
   const deleteListMutation = useDeleteListMutation();
 
+  const resetListModalState = useCallback(() => {
+    setListModalMode(null);
+    setListModalName("");
+    setListModalError(null);
+  }, []);
+
+  const openListModal = useCallback((mode: ListModalMode, initialName: string) => {
+    setListModalMode(mode);
+    setListModalName(initialName);
+    setListModalError(null);
+  }, []);
+
   const handleActivateList = useCallback(async () => {
     if (!selectedListId) return;
 
     try {
       await activateListMutation.mutateAsync(selectedListId);
     } catch (error: any) {
-      alert(error.message);
+      alert(error.message || CONSTRUCTOR_TEXT.listActionError);
     }
   }, [activateListMutation, selectedListId]);
 
   const openCreateListModal = useCallback(() => {
-    setListModalMode("create");
-    setListModalName("");
-    setListModalError(null);
-  }, []);
+    openListModal("create", "");
+  }, [openListModal]);
 
   const openRenameListModal = useCallback(() => {
     if (!selectedList) return;
-    setListModalMode("rename");
-    setListModalName(selectedList.name);
-    setListModalError(null);
-  }, [selectedList]);
+    openListModal("rename", selectedList.name);
+  }, [openListModal, selectedList]);
 
   const openDuplicateListModal = useCallback(() => {
     if (!selectedList) return;
-    setListModalMode("duplicate");
-    setListModalName(`${selectedList.name} (копия)`);
-    setListModalError(null);
-  }, [selectedList]);
-
-  const closeListModal = useCallback(() => {
-    setListModalMode(null);
-    setListModalName("");
-    setListModalError(null);
-  }, []);
+    openListModal("duplicate", `${selectedList.name}${CONSTRUCTOR_TEXT.listDuplicateSuffix}`);
+  }, [openListModal, selectedList]);
 
   const handleListModalSubmit = useCallback(async () => {
-    if (!listModalName.trim() || !listModalMode) return;
+    const trimmedName = listModalName.trim();
+    if (!trimmedName || !listModalMode) return;
+
     setListModalError(null);
 
     try {
       if (listModalMode === "create") {
-        const payload = await createListMutation.mutateAsync({ name: listModalName.trim() });
-        if (payload.insertId) setSelectedListId(payload.insertId);
-      } else if (listModalMode === "rename") {
-        if (!selectedListId) return;
-        await updateListMutation.mutateAsync({ id: selectedListId, payload: { name: listModalName.trim() } });
-      } else if (listModalMode === "duplicate") {
-        if (!selectedListId) return;
-        const payload = await duplicateListMutation.mutateAsync({ id: selectedListId, name: listModalName.trim() });
-        if (payload.insertId) setSelectedListId(payload.insertId);
+        const payload = await createListMutation.mutateAsync({ name: trimmedName });
+        if (payload.insertId) {
+          setSelectedListId(payload.insertId);
+        }
       }
-      closeListModal();
+
+      if (listModalMode === "rename") {
+        if (!selectedListId) return;
+        await updateListMutation.mutateAsync({ id: selectedListId, payload: { name: trimmedName } });
+      }
+
+      if (listModalMode === "duplicate") {
+        if (!selectedListId) return;
+        const payload = await duplicateListMutation.mutateAsync({ id: selectedListId, name: trimmedName });
+        if (payload.insertId) {
+          setSelectedListId(payload.insertId);
+        }
+      }
+
+      resetListModalState();
     } catch (error: any) {
-      setListModalError(error.message || "Не удалось выполнить операцию с листом");
+      setListModalError(error.message || CONSTRUCTOR_TEXT.listActionError);
     }
   }, [
-    closeListModal,
     createListMutation,
     duplicateListMutation,
     listModalMode,
     listModalName,
+    resetListModalState,
     selectedListId,
     setSelectedListId,
     updateListMutation,
@@ -103,14 +117,14 @@ export function useConstructorListManagement({
 
   const handleDeleteList = useCallback(async () => {
     if (!selectedListId || !selectedList) return;
-    if (!confirm(`Удалить лист «${selectedList.name}»?`)) return;
+    if (!confirm(CONSTRUCTOR_TEXT.listDeleteConfirm(selectedList.name))) return;
 
     try {
       await deleteListMutation.mutateAsync(selectedListId);
       setSelectedListId(null);
       setSchedule([]);
     } catch (error: any) {
-      alert(error.message || "Не удалось удалить лист");
+      alert(error.message || CONSTRUCTOR_TEXT.listDeleteError);
     }
   }, [deleteListMutation, selectedList, selectedListId, setSchedule, setSelectedListId]);
 
@@ -149,7 +163,7 @@ export function useConstructorListManagement({
     openCreateListModal,
     openRenameListModal,
     openDuplicateListModal,
-    closeListModal,
+    closeListModal: resetListModalState,
     handleListModalSubmit,
     handleDeleteList,
   };

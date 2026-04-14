@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import type { ListItem } from "@/components/schedule/constructor-types";
+import { CONSTRUCTOR_TEXT } from "@/components/schedule/constructor-text";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/field";
 import { AppIcon } from "@/components/ui/icons";
@@ -33,7 +34,7 @@ export function ConstructorToolbar({
   const hasSelectedList = !!selectedListId;
 
   return (
-    <div className="mb-5 flex flex-wrap items-center gap-3 max-w-[calc(100vh-260px)]">
+    <div className="mb-5 flex w-full flex-wrap items-center gap-3">
       <Select
         className="max-w-[250px]"
         value={selectedListId || ""}
@@ -83,8 +84,8 @@ export function ConstructorToolbar({
       <div className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-text-tertiary">
         <AppIcon name="warning" className="h-3 w-3" />
         {isShiftPressed
-          ? "Shift зажат: можно перетаскивать занятия между ячейками без открытия модального окна"
-          : "Удерживайте Shift при перетаскивании, чтобы быстро переносить занятия между ячейками"}
+          ? CONSTRUCTOR_TEXT.shiftActiveHint
+          : CONSTRUCTOR_TEXT.shiftHint}
       </div>
     </div>
   );

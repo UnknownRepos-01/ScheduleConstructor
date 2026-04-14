@@ -1,8 +1,22 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { CellCoordinates, ClassItem, Classroom, ScheduleEntry, SchedulePayload, Subject, Teacher } from "@/components/schedule/constructor-types";
+import {
+  formatTeacherShortName,
+  getEntryTeacherIds,
+  uniqueNumbers,
+} from "@/components/schedule/constructor-entry-utils";
+import type {
+  AddLessonForm,
+  CellCoordinates,
+  ClassItem,
+  Classroom,
+  ScheduleEntry,
+  SchedulePayload,
+  Subject,
+  Teacher,
+} from "@/components/schedule/constructor-types";
 import { useScheduleAutocompleteQuery } from "@/lib/react-query";
 
 type UseConstructorLessonEditorParams = {
@@ -20,7 +34,35 @@ type UseConstructorLessonEditorParams = {
   updateScheduleEntryInState: (entry: ScheduleEntry) => void;
 };
 
-const unique = (values: number[]) => Array.from(new Set(values));
+type TeacherSuggestion = {
+  teacherId: number;
+  label: string;
+};
+
+type SubjectSuggestion = {
+  subjectId: number;
+  name: string;
+};
+
+type ClassroomSuggestion = {
+  classroomId: number;
+  number: string;
+  score: number;
+};
+
+const EMPTY_FORM: AddLessonForm = {
+  subjectId: "",
+  teacherIds: [],
+  classroomIds: [],
+};
+
+function toggleNumber(values: number[], value: number): number[] {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+}
+
+function appendUnique(values: number[], value: number): number[] {
+  return values.includes(value) ? values : [...values, value];
+}
 
 export function useConstructorLessonEditor({
   selectedListId,
@@ -38,7 +80,7 @@ export function useConstructorLessonEditor({
 }: UseConstructorLessonEditorParams) {
   const [activeCell, setActiveCell] = useState<CellCoordinates | null>(null);
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
-  const [addLessonForm, setAddLessonForm] = useState({ subjectId: "", teacherIds: [] as number[], classroomIds: [] as number[] });
+  const [addLessonForm, setAddLessonForm] = useState<AddLessonForm>(EMPTY_FORM);
   const [addLessonError, setAddLessonError] = useState<string | null>(null);
   const [isSubmittingLesson, setIsSubmittingLesson] = useState(false);
   const [isSubjectManuallyChanged, setIsSubjectManuallyChanged] = useState(false);
@@ -47,9 +89,14 @@ export function useConstructorLessonEditor({
 
   const selectedSubjectIdForAutocomplete = addLessonForm.subjectId ? Number(addLessonForm.subjectId) : null;
   const selectedTeacherIdForAutocomplete = addLessonForm.teacherIds[0] ?? null;
+
   const autocompleteQuery = useScheduleAutocompleteQuery(
     activeCell
-      ? { classId: activeCell.classId, subjectId: selectedSubjectIdForAutocomplete, teacherId: selectedTeacherIdForAutocomplete }
+      ? {
+          classId: activeCell.classId,
+          subjectId: selectedSubjectIdForAutocomplete,
+          teacherId: selectedTeacherIdForAutocomplete,
+        }
       : null,
     !!activeCell,
   );
@@ -57,7 +104,7 @@ export function useConstructorLessonEditor({
   const resetAddLessonModal = useCallback(() => {
     setActiveCell(null);
     setEditingEntryId(null);
-    setAddLessonForm({ subjectId: "", teacherIds: [], classroomIds: [] });
+    setAddLessonForm(EMPTY_FORM);
     setAddLessonError(null);
     setIsSubmittingLesson(false);
     setIsSubjectManuallyChanged(false);
@@ -68,7 +115,7 @@ export function useConstructorLessonEditor({
   const openAddLessonModal = useCallback((cell: CellCoordinates) => {
     setActiveCell(cell);
     setEditingEntryId(null);
-    setAddLessonForm({ subjectId: "", teacherIds: [], classroomIds: [] });
+    setAddLessonForm(EMPTY_FORM);
     setAddLessonError(null);
     setIsSubjectManuallyChanged(false);
     setIsTeacherManuallyChanged(false);
@@ -79,15 +126,9 @@ export function useConstructorLessonEditor({
     setActiveCell(cell);
     setEditingEntryId(entry.id);
     setAddLessonError(null);
-    const nextTeacherIds = entry.teacherIds && entry.teacherIds.length > 0
-      ? entry.teacherIds
-      : entry.teacherId
-        ? [entry.teacherId]
-        : [];
-
     setAddLessonForm({
       subjectId: entry.subjectId ? String(entry.subjectId) : "",
-      teacherIds: nextTeacherIds,
+      teacherIds: getEntryTeacherIds(entry),
       classroomIds: entry.classroomIds,
     });
     setIsSubjectManuallyChanged(false);
@@ -99,19 +140,23 @@ export function useConstructorLessonEditor({
     async (event: React.FormEvent) => {
       event.preventDefault();
       if (!selectedListId || !activeCell) return;
+
       setAddLessonError(null);
       setIsSubmittingLesson(true);
+
       try {
+        const teacherIds = uniqueNumbers(addLessonForm.teacherIds);
         const payload: SchedulePayload = {
           listId: selectedListId,
           classId: activeCell.classId,
           day: activeCell.day,
           lessonNumber: activeCell.lessonNumber,
           subjectId: addLessonForm.subjectId ? Number(addLessonForm.subjectId) : null,
-          teacherIds: unique(addLessonForm.teacherIds),
-          teacherId: addLessonForm.teacherIds[0] ?? null,
-          classroomIds: unique(addLessonForm.classroomIds),
+          teacherIds,
+          teacherId: teacherIds[0] ?? null,
+          classroomIds: uniqueNumbers(addLessonForm.classroomIds),
         };
+
         const response = await upsertCell(payload);
         updateScheduleEntryInState({ ...payload, id: Number(response.scheduleId), teacherId: payload.teacherId ?? null });
         resetAddLessonModal();
@@ -126,8 +171,8 @@ export function useConstructorLessonEditor({
 
   const activeCellTeacherBusy = useMemo(() => {
     if (!activeCell || addLessonForm.teacherIds.length === 0) return false;
-    return addLessonForm.teacherIds.some((teacherId) =>
-      getTeacherBusyCount(teacherId, activeCell, editingEntryId ?? undefined) > 0,
+    return addLessonForm.teacherIds.some(
+      (teacherId) => getTeacherBusyCount(teacherId, activeCell, editingEntryId ?? undefined) > 0,
     );
   }, [activeCell, addLessonForm.teacherIds, editingEntryId, getTeacherBusyCount]);
 
@@ -135,84 +180,117 @@ export function useConstructorLessonEditor({
     const map = new Map<number, number>();
     const payload = autocompleteQuery.data;
     if (!payload) return map;
-    payload.teachersBySubject.forEach((item) => map.set(item.teacherId, Math.max(map.get(item.teacherId) ?? 0, 200 + item.count)));
-    payload.teachersByClass.forEach((item) => map.set(item.teacherId, Math.max(map.get(item.teacherId) ?? 0, 100 + item.count)));
+
+    payload.teachersBySubject.forEach((item) => {
+      map.set(item.teacherId, Math.max(map.get(item.teacherId) ?? 0, 200 + item.count));
+    });
+
+    payload.teachersByClass.forEach((item) => {
+      map.set(item.teacherId, Math.max(map.get(item.teacherId) ?? 0, 100 + item.count));
+    });
+
     return map;
   }, [autocompleteQuery.data]);
 
   const subjectAutocompletePriority = useMemo(() => {
     const map = new Map<number, number>();
-    autocompleteQuery.data?.subjectsByTeacher.forEach((item) => map.set(item.subjectId, item.count));
+    autocompleteQuery.data?.subjectsByTeacher.forEach((item) => {
+      map.set(item.subjectId, item.count);
+    });
     return map;
   }, [autocompleteQuery.data]);
 
-  const teacherSuggestions = useMemo(
-    () =>
-      (autocompleteQuery.data?.teachersBySubject ?? [])
-        .map((item) => {
-          const teacher = teacherById.get(item.teacherId);
-          if (!teacher) return null;
-          return { teacherId: item.teacherId, label: `${teacher.surname} ${teacher.name[0]}.${teacher.patronymic ? teacher.patronymic[0] + "." : ""}` };
-        })
-        .filter(Boolean) as { teacherId: number; label: string }[],
-    [autocompleteQuery.data, teacherById],
-  );
+  const teacherSuggestions = useMemo<TeacherSuggestion[]>(() => {
+    return (autocompleteQuery.data?.teachersBySubject ?? [])
+      .map((item) => {
+        const teacher = teacherById.get(item.teacherId);
+        if (!teacher) return null;
+        return { teacherId: item.teacherId, label: formatTeacherShortName(teacher) };
+      })
+      .filter(Boolean) as TeacherSuggestion[];
+  }, [autocompleteQuery.data, teacherById]);
 
-  const subjectSuggestions = useMemo(
-    () =>
-      (autocompleteQuery.data?.subjectsByTeacher ?? [])
-        .map((item) => {
-          const subject = subjectById.get(item.subjectId);
-          if (!subject) return null;
-          return { subjectId: item.subjectId, name: subject.name };
-        })
-        .filter(Boolean) as { subjectId: number; name: string }[],
-    [autocompleteQuery.data, subjectById],
-  );
+  const subjectSuggestions = useMemo<SubjectSuggestion[]>(() => {
+    return (autocompleteQuery.data?.subjectsByTeacher ?? [])
+      .map((item) => {
+        const subject = subjectById.get(item.subjectId);
+        if (!subject) return null;
+        return { subjectId: item.subjectId, name: subject.name };
+      })
+      .filter(Boolean) as SubjectSuggestion[];
+  }, [autocompleteQuery.data, subjectById]);
 
-  const classroomSuggestions = useMemo(
-    () =>
-      (autocompleteQuery.data?.classroomsByTeacher ?? [])
-        .map((item) => {
-          const classroom = classroomById.get(item.classroomId);
-          if (!classroom) return null;
-          return { classroomId: item.classroomId, number: classroom.number, score: item.count };
-        })
-        .filter(Boolean) as { classroomId: number; number: string; score: number }[],
-    [autocompleteQuery.data, classroomById],
-  );
+  const classroomSuggestions = useMemo<ClassroomSuggestion[]>(() => {
+    return (autocompleteQuery.data?.classroomsByTeacher ?? [])
+      .map((item) => {
+        const classroom = classroomById.get(item.classroomId);
+        if (!classroom) return null;
+        return { classroomId: item.classroomId, number: classroom.number, score: item.count };
+      })
+      .filter(Boolean) as ClassroomSuggestion[];
+  }, [autocompleteQuery.data, classroomById]);
 
   useEffect(() => {
-    if (!activeCell || editingEntryId !== null || isTeacherManuallyChanged || addLessonForm.teacherIds.length > 0 || !addLessonForm.subjectId) return;
+    if (!activeCell || editingEntryId !== null || isTeacherManuallyChanged || addLessonForm.teacherIds.length > 0) return;
+    if (!addLessonForm.subjectId) return;
+
     const bestTeacherId = teacherSuggestions[0]?.teacherId;
     if (!bestTeacherId) return;
-    setAddLessonForm((previous) => (previous.teacherIds.length > 0 ? previous : { ...previous, teacherIds: [bestTeacherId] }));
-  }, [activeCell, addLessonForm.subjectId, addLessonForm.teacherIds.length, editingEntryId, isTeacherManuallyChanged, teacherSuggestions]);
+
+    setAddLessonForm((previous) =>
+      previous.teacherIds.length > 0 ? previous : { ...previous, teacherIds: [bestTeacherId] },
+    );
+  }, [
+    activeCell,
+    addLessonForm.subjectId,
+    addLessonForm.teacherIds.length,
+    editingEntryId,
+    isTeacherManuallyChanged,
+    teacherSuggestions,
+  ]);
 
   useEffect(() => {
-    if (!activeCell || editingEntryId !== null || isSubjectManuallyChanged || addLessonForm.subjectId || addLessonForm.teacherIds.length === 0) return;
+    if (!activeCell || editingEntryId !== null || isSubjectManuallyChanged || addLessonForm.subjectId) return;
+    if (addLessonForm.teacherIds.length === 0) return;
+
     const topSubjectId = subjectSuggestions[0]?.subjectId;
     if (!topSubjectId) return;
-    setAddLessonForm((previous) => (previous.subjectId ? previous : { ...previous, subjectId: String(topSubjectId) }));
-  }, [activeCell, addLessonForm.subjectId, addLessonForm.teacherIds.length, editingEntryId, isSubjectManuallyChanged, subjectSuggestions]);
+
+    setAddLessonForm((previous) =>
+      previous.subjectId ? previous : { ...previous, subjectId: String(topSubjectId) },
+    );
+  }, [
+    activeCell,
+    addLessonForm.subjectId,
+    addLessonForm.teacherIds.length,
+    editingEntryId,
+    isSubjectManuallyChanged,
+    subjectSuggestions,
+  ]);
 
   useEffect(() => {
-    if (!activeCell || editingEntryId !== null || areClassroomsManuallyChanged || addLessonForm.classroomIds.length > 0 || addLessonForm.teacherIds.length === 0) return;
+    if (!activeCell || editingEntryId !== null || areClassroomsManuallyChanged || addLessonForm.classroomIds.length > 0) return;
+    if (addLessonForm.teacherIds.length === 0) return;
 
-    const defaultsFromTeachers = unique(
+    const defaultClassroomIds = uniqueNumbers(
       addLessonForm.teacherIds
-        .map((teacherId) => teachers.find((teacher) => teacher.id === teacherId)?.defaultClassroomId ?? null)
+        .map((teacherId) => teacherById.get(teacherId)?.defaultClassroomId ?? null)
         .filter((classroomId): classroomId is number => classroomId !== null && classroomId > 0),
     );
 
-    if (defaultsFromTeachers.length > 0) {
-      setAddLessonForm((previous) => (previous.classroomIds.length > 0 ? previous : { ...previous, classroomIds: defaultsFromTeachers }));
+    if (defaultClassroomIds.length > 0) {
+      setAddLessonForm((previous) =>
+        previous.classroomIds.length > 0 ? previous : { ...previous, classroomIds: defaultClassroomIds },
+      );
       return;
     }
 
-    const topClassroomId = classroomSuggestions[0]?.classroomId;
-    if (!topClassroomId) return;
-    setAddLessonForm((previous) => (previous.classroomIds.length > 0 ? previous : { ...previous, classroomIds: [topClassroomId] }));
+    const suggestedClassroomId = classroomSuggestions[0]?.classroomId;
+    if (!suggestedClassroomId) return;
+
+    setAddLessonForm((previous) =>
+      previous.classroomIds.length > 0 ? previous : { ...previous, classroomIds: [suggestedClassroomId] },
+    );
   }, [
     activeCell,
     addLessonForm.classroomIds.length,
@@ -220,6 +298,7 @@ export function useConstructorLessonEditor({
     areClassroomsManuallyChanged,
     classroomSuggestions,
     editingEntryId,
+    teacherById,
     teachers,
   ]);
 
@@ -241,10 +320,11 @@ export function useConstructorLessonEditor({
 
   const teacherOptions = useMemo(() => {
     if (!activeCell) return [];
+
     return teachers
       .map((teacher) => ({
         id: teacher.id,
-        label: `${teacher.surname} ${teacher.name[0]}.${teacher.patronymic ? teacher.patronymic[0] + "." : ""}`,
+        label: formatTeacherShortName(teacher),
         isBusy: getTeacherBusyCount(teacher.id, activeCell, editingEntryId ?? undefined) > 0,
         priority: teacherAutocompletePriority.get(teacher.id) ?? 0,
       }))
@@ -258,8 +338,12 @@ export function useConstructorLessonEditor({
 
   const classroomOptions = useMemo(() => {
     if (!activeCell) return [];
+
     const classroomPriority = new Map<number, number>();
-    classroomSuggestions.forEach((item) => classroomPriority.set(item.classroomId, item.score));
+    classroomSuggestions.forEach((item) => {
+      classroomPriority.set(item.classroomId, item.score);
+    });
+
     return classrooms
       .map((classroom) => ({
         id: classroom.id,
@@ -300,39 +384,31 @@ export function useConstructorLessonEditor({
     },
     onToggleTeacher: (teacherId: number) => {
       setIsTeacherManuallyChanged(true);
-      setAddLessonForm((previous) => {
-        const selected = previous.teacherIds.includes(teacherId);
-        return {
-          ...previous,
-          teacherIds: selected
-            ? previous.teacherIds.filter((id) => id !== teacherId)
-            : [...previous.teacherIds, teacherId],
-        };
-      });
+      setAddLessonForm((previous) => ({
+        ...previous,
+        teacherIds: toggleNumber(previous.teacherIds, teacherId),
+      }));
     },
     onToggleClassroom: (classroomId: number) => {
       setAreClassroomsManuallyChanged(true);
-      setAddLessonForm((previous) => {
-        const selected = previous.classroomIds.includes(classroomId);
-        return {
-          ...previous,
-          classroomIds: selected ? previous.classroomIds.filter((id) => id !== classroomId) : [...previous.classroomIds, classroomId],
-        };
-      });
+      setAddLessonForm((previous) => ({
+        ...previous,
+        classroomIds: toggleNumber(previous.classroomIds, classroomId),
+      }));
     },
     onApplyTeacherSuggestion: (teacherId: number) => {
       setIsTeacherManuallyChanged(true);
-      setAddLessonForm((previous) => {
-        if (previous.teacherIds.includes(teacherId)) return previous;
-        return { ...previous, teacherIds: [...previous.teacherIds, teacherId] };
-      });
+      setAddLessonForm((previous) => ({
+        ...previous,
+        teacherIds: appendUnique(previous.teacherIds, teacherId),
+      }));
     },
     onApplyClassroomSuggestion: (classroomId: number) => {
       setAreClassroomsManuallyChanged(true);
-      setAddLessonForm((previous) => {
-        if (previous.classroomIds.includes(classroomId)) return previous;
-        return { ...previous, classroomIds: [...previous.classroomIds, classroomId] };
-      });
+      setAddLessonForm((previous) => ({
+        ...previous,
+        classroomIds: appendUnique(previous.classroomIds, classroomId),
+      }));
     },
   };
 }

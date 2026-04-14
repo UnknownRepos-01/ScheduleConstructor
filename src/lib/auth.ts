@@ -15,7 +15,6 @@ const STATUS_CONFIRMED = "Подтверждён";
 const STATUS_PENDING = "Ожидание подтверждения";
 
 const INVALID_LOGIN_MESSAGE = "Неверный логин или пароль";
-const TRUSTED_IP_TTL_DAYS = Number.parseInt(process.env.TRUSTED_IP_TTL_DAYS ?? "30", 10);
 
 const getSafeRounds = (): number => {
   if (Number.isNaN(BCRYPT_ROUNDS)) return 12;
@@ -26,16 +25,6 @@ const isBcryptHash = (value: string): boolean => /^\$2[aby]\$\d{2}\$/.test(value
 
 const signSessionPayload = (payload: string): string =>
   createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
-
-const getIpTtlMs = (): number => {
-  const safeDays = Number.isNaN(TRUSTED_IP_TTL_DAYS) ? 30 : Math.max(1, TRUSTED_IP_TTL_DAYS);
-  return safeDays * 24 * 60 * 60 * 1000;
-};
-
-const isExpiredDate = (dateValue: Date | string, ttlMs: number): boolean => {
-  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
-  return Date.now() - date.getTime() > ttlMs;
-};
 
 const auditAuthEvent = (event: string, payload: Record<string, unknown>) => {
   console.info(`[auth] ${event}`, payload);
@@ -154,7 +143,6 @@ export async function authenticateUser(
     const allUserIpAuths = await db.select().from(ipAuths).where(eq(ipAuths.userId, user.id));
     const confirmedStatusId = await getStatusIdByName(STATUS_CONFIRMED);
     const pendingStatusId = await getStatusIdByName(STATUS_PENDING);
-    const ipTtlMs = getIpTtlMs();
 
     if (allUserIpAuths.length === 0) {
       await db.insert(ipAuths).values({
@@ -185,20 +173,6 @@ export async function authenticateUser(
     }
 
     if (existingIpAuth.statusId === confirmedStatusId) {
-      if (isExpiredDate(existingIpAuth.createdAt, ipTtlMs)) {
-        await db
-          .update(ipAuths)
-          .set({ statusId: pendingStatusId, createdAt: new Date() })
-          .where(eq(ipAuths.id, existingIpAuth.id));
-        auditAuthEvent("trusted_ip_expired", { userId: user.id, ip, ipAuthId: existingIpAuth.id });
-
-        return {
-          success: false,
-          pending: true,
-          pendingAuthId: existingIpAuth.id,
-          message: "Срок доверия к этому IP-адресу истёк. Требуется повторное подтверждение из уже доверенной сессии",
-        };
-      }
 
       await db.update(ipAuths).set({ createdAt: new Date() }).where(eq(ipAuths.id, existingIpAuth.id));
       auditAuthEvent("trusted_ip_login", { userId: user.id, ip, ipAuthId: existingIpAuth.id });
@@ -323,7 +297,7 @@ export async function isCurrentRequestFromTrustedIp(request: Request, userId: nu
     return false;
   }
 
-  return !isExpiredDate(trustedRow.createdAt, getIpTtlMs());
+  return true;
 }
 
 export async function changePasswordForUser(userId: number, currentPassword: string, newPassword: string): Promise<boolean> {

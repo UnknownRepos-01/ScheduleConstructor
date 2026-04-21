@@ -1,91 +1,57 @@
 ﻿# ScheduleConstructor
 
-Коротко: веб-приложение для управления школьным расписанием.
+Веб-приложение для управления школьным расписанием (Next.js + MySQL).
 
-## Что умеет
-- Авторизация по логину/паролю с сессией в cookie.
-- Подтверждение входа с нового IP-адреса.
-- Админ-панель для справочников: параллели, классы, предметы, кабинеты, пользователи.
-- Конструктор расписания с drag-and-drop.
-- Один урок может иметь несколько преподавателей и несколько кабинетов.
-- Публичный просмотр активного расписания (`/schedule`) и расписания по преподавателям (`/schedule/teachers`).
+## Production запуск через Docker
 
-## Технологии
-- Next.js 14 (App Router)
-- React 18 + TypeScript
-- Drizzle ORM + MySQL 8
-- React Query + Axios
-- Tailwind CSS
-
-## Быстрый старт
-
-### 1. Установка зависимостей
+### 1. Подготовка окружения
 ```bash
-npm install
+cp .env.example .env
 ```
 
-### 2. Запуск базы данных
+При необходимости обновите значения в `.env` (секреты, доступ к БД и т.д.).
+
+### 2. Запуск
 ```bash
 docker compose up -d
 ```
 
-По умолчанию поднимается MySQL:
-- host: `localhost`
-- port: `3306`
-- db: `schedule_db`
-- user: `root`
-- password: `housemorningdinner`
+После запуска приложение доступно через Nginx:
+- `http://localhost`
 
-### 3. Инициализация данных
+### 3. Пересборка образов
 ```bash
-npm run db:seed
+docker compose up -d --build
 ```
 
-Скрипт создаёт базовые роли и тестового администратора:
-- login: `admin`
-- password: `admin_password`
-
-### 4. Запуск приложения
+### 4. Остановка
 ```bash
-npm run dev
+docker compose down
 ```
 
-Откройте: `http://localhost:3000`
+## Что разворачивается
+- `nextjs` — production build (`next build`) и запуск (`next start`) на порту `3000`.
+- `nginx` — reverse proxy на порту `80`, проксирует запросы в `nextjs`, включает gzip и кеширование `/_next/static`.
 
-## Переменные окружения
-Проект работает с дефолтами, но для стабильной настройки задайте значения явно:
-
-```env
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=housemorningdinner
-DB_NAME=schedule_db
-
-SESSION_SECRET=change-me
-NEXTAUTH_SECRET=change-me
-
-BCRYPT_SALT_ROUNDS=12
-
-NEXT_PUBLIC_API_BASE_URL=/api
+## Пример структуры docker-конфигурации
+```text
+.
+├─ Dockerfile
+├─ Dockerfile.nginx
+├─ docker-compose.yml
+├─ nginx.conf
+├─ .dockerignore
+└─ .env.example
 ```
 
-## Основные команды
+## Полезные команды
 ```bash
-npm run dev
-npm run build
-npm run start
-npm run db:seed
+# Логи всех контейнеров
+docker compose logs -f
+
+# Логи только nginx
+docker compose logs -f nginx
+
+# Логи только nextjs
+docker compose logs -f nextjs
 ```
-
-## Структура проекта (кратко)
-- `src/app` — страницы и API-роуты.
-- `src/components` — UI и крупные клиентские модули.
-- `src/lib` — бизнес-логика, auth, API-клиент, React Query hooks.
-- `src/db` — подключение к БД, схема, seed.
-- `drizzle` — SQL-миграции.
-
-## Важно
-- Для production обязательно задайте безопасные значения `SESSION_SECRET`/`NEXTAUTH_SECRET`.
-- Проверьте cookie-настройки (`secure`) под HTTPS.
-
-

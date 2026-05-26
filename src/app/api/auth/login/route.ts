@@ -1,10 +1,14 @@
-﻿import { NextResponse } from "next/server";
-import { authenticateUser, createSessionToken, getClientIp } from "../../../../lib/auth";
+import { NextResponse } from "next/server";
+
+import { apiErrorResponse } from "@/lib/api/route-helpers";
+import { setSessionCookie } from "@/lib/api/session-cookie";
+import { authenticateUser, createSessionToken, getClientIp } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { login, password } = body;
+    const login = typeof body.login === "string" ? body.login.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
 
     if (!login || !password) {
       return NextResponse.json({ error: "Логин и пароль обязательны" }, { status: 400 });
@@ -16,7 +20,7 @@ export async function POST(request: Request) {
     if (!result.success) {
       return NextResponse.json(
         { error: result.message, pending: result.pending, pendingAuthId: result.pendingAuthId },
-        { status: result.pending ? 403 : 401 }
+        { status: result.pending ? 403 : 401 },
       );
     }
 
@@ -26,16 +30,10 @@ export async function POST(request: Request) {
       user: result.user,
     });
 
-    response.cookies.set("schedule_session", token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      maxAge: 86400,
-      path: "/",
-    });
+    setSessionCookie(response.cookies, token);
 
     return response;
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

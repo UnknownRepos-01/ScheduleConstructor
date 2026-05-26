@@ -1,27 +1,26 @@
-﻿import { NextResponse } from "next/server";
-import { db } from "../../../db/index";
-import { classes, grades } from "../../../db/schema";
-import { AdminCheck, getSession } from "@/lib/auth";
+import { and, eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
+import { db } from "@/db/index";
+import { classes, grades } from "@/db/schema";
+import { apiErrorResponse, requireAdmin } from "@/lib/api/route-helpers";
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const allClasses = await db.select().from(classes);
     const allGrades = await db.select().from(grades);
+    const gradeById = new Map(allGrades.map((grade) => [grade.id, grade]));
 
-    const result = allClasses.map((c) => {
-      const grade = allGrades.find((g) => g.id === c.gradeId);
+    const result = allClasses.map((classItem) => {
+      const grade = gradeById.get(classItem.gradeId);
       return {
-        ...c,
+        ...classItem,
         gradeNumber: grade?.number,
         gradeHours: grade?.hours,
-        displayName: grade ? `${grade.number}${c.letter}` : c.letter,
+        displayName: grade ? `${grade.number}${classItem.letter}` : classItem.letter,
       };
     });
 
@@ -31,29 +30,35 @@ export async function GET() {
     });
 
     return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const body = await request.json();
-    if (!body.gradeId || !body.letter) {
+    const gradeId = Number.parseInt(String(body.gradeId), 10);
+    const letter = typeof body.letter === "string" ? body.letter.trim() : "";
+    if (!gradeId || !letter) {
       return NextResponse.json({ error: "Параллель и буква класса обязательны" }, { status: 400 });
     }
 
-    const [result] = await db.insert(classes).values({
-      gradeId: body.gradeId,
-      letter: body.letter,
-    });
+    const [duplicate] = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(and(eq(classes.gradeId, gradeId), eq(classes.letter, letter)));
+    if (duplicate) {
+      return NextResponse.json({ error: "Класс с такой параллелью и буквой уже существует" }, { status: 409 });
+    }
+
+    const [result] = await db.insert(classes).values({ gradeId, letter });
 
     return NextResponse.json({ message: "Класс успешно создан", insertId: result.insertId }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

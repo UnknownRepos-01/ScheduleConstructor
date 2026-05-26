@@ -1,38 +1,41 @@
-﻿import { NextResponse } from "next/server";
-import { db } from "../../../db/index";
-import { subjects } from "../../../db/schema";
-import { AdminCheck, getSession } from "@/lib/auth";
+import { eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
+import { db } from "@/db/index";
+import { subjects } from "@/db/schema";
+import { apiErrorResponse, requireAdmin } from "@/lib/api/route-helpers";
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const all = await db.select().from(subjects);
     return NextResponse.json(all);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const body = await request.json();
-    if (!body.name) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) {
       return NextResponse.json({ error: "Название предмета обязательно" }, { status: 400 });
     }
 
-    const [result] = await db.insert(subjects).values({ name: body.name });
+    const [duplicate] = await db.select({ id: subjects.id }).from(subjects).where(eq(subjects.name, name));
+    if (duplicate) {
+      return NextResponse.json({ error: "Предмет с таким названием уже существует" }, { status: 409 });
+    }
+
+    const [result] = await db.insert(subjects).values({ name });
     return NextResponse.json({ message: "Предмет успешно создан", insertId: result.insertId }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

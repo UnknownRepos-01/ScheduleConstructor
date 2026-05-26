@@ -3,17 +3,21 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/db/index";
 import { roles, users } from "@/db/schema";
-import { AdminOnlyCheck, getSession, hashPassword, validateNewPassword } from "@/lib/auth";
+import { hashPassword, validateNewPassword } from "@/lib/auth";
 import { ROLE_MANAGER } from "@/lib/access";
+import { apiErrorResponse, requireAdminOnly } from "@/lib/api/route-helpers";
 
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
 const FORBIDDEN_MESSAGE = "Только администратор может создавать менеджеров";
+
+const getManagerRoleId = async () => {
+  const [managerRole] = await db.select().from(roles).where(eq(roles.name, ROLE_MANAGER));
+  return managerRole?.id ?? null;
+};
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminOnlyCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const { error: adminError } = await requireAdminOnly(FORBIDDEN_MESSAGE);
+    if (adminError) return adminError;
 
     const body = await request.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -31,8 +35,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: passwordValidationError }, { status: 400 });
     }
 
-    const existingRole = await db.select().from(roles).where(eq(roles.name, ROLE_MANAGER));
-    const roleId = existingRole[0]?.id;
+    const roleId = await getManagerRoleId();
     if (!roleId) {
       return NextResponse.json({ error: "Роль 'Менеджер' не найдена в системе" }, { status: 500 });
     }
@@ -53,18 +56,16 @@ export async function POST(request: Request) {
     if (message.includes("Duplicate")) {
       return NextResponse.json({ error: "Пользователь с таким логином уже существует" }, { status: 409 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiErrorResponse(err, "Неизвестная ошибка");
   }
 }
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminOnlyCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const { error: adminError } = await requireAdminOnly(FORBIDDEN_MESSAGE);
+    if (adminError) return adminError;
 
-    const existingRole = await db.select().from(roles).where(eq(roles.name, ROLE_MANAGER));
-    const roleId = existingRole[0]?.id;
+    const roleId = await getManagerRoleId();
     if (!roleId) {
       return NextResponse.json([]);
     }
@@ -80,7 +81,6 @@ export async function GET() {
       })),
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Неизвестная ошибка";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiErrorResponse(err, "Неизвестная ошибка");
   }
 }

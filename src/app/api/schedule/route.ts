@@ -14,12 +14,23 @@ import {
   subjects,
   users,
 } from "@/db/schema";
+import { apiErrorResponse } from "@/lib/api/route-helpers";
 
 const toTeacherShortName = (teacher: { surname: string | null; name: string | null; patronymic: string | null }) =>
   `${teacher.surname ?? ""} ${teacher.name?.[0] ?? ""}.${teacher.patronymic?.[0] ? teacher.patronymic[0] + "." : ""}`.trim();
 
 const toTeacherFullName = (teacher: { surname: string | null; name: string | null; patronymic: string | null }) =>
   `${teacher.surname ?? ""} ${teacher.name ?? ""} ${teacher.patronymic ?? ""}`.trim();
+
+const appendToMapList = <TValue>(map: Map<number, TValue[]>, key: number, value: TValue) => {
+  const current = map.get(key) ?? [];
+  current.push(value);
+  map.set(key, current);
+};
+
+const toIdMap = <TItem extends { id: number }>(items: TItem[]) => new Map(items.map((item) => [item.id, item]));
+
+const isDefined = <TValue>(value: TValue | undefined | null): value is TValue => value !== undefined && value !== null;
 
 export async function GET() {
   try {
@@ -50,30 +61,33 @@ export async function GET() {
         db.select().from(scheduleChanges).catch(() => []),
       ]);
 
+    const classById = toIdMap(allClasses);
+    const gradeById = toIdMap(allGrades);
+    const subjectById = toIdMap(allSubjects);
+    const teacherById = toIdMap(allTeachers);
+    const classroomById = toIdMap(allClassrooms);
+    const changedScheduleIds = new Set(allChanges.map((item) => item.scheduleId));
+
     const teachersByScheduleId = new Map<number, number[]>();
-    allLessonTeachers.forEach((row) => {
-      const current = teachersByScheduleId.get(row.scheduleId) ?? [];
-      current.push(row.teacherId);
-      teachersByScheduleId.set(row.scheduleId, current);
-    });
+    allLessonTeachers.forEach((row) => appendToMapList(teachersByScheduleId, row.scheduleId, row.teacherId));
+
+    const classroomsByScheduleId = new Map<number, number[]>();
+    allLessonClassrooms.forEach((row) => appendToMapList(classroomsByScheduleId, row.scheduleId, row.classroomId));
 
     const scheduleData = entries.map((entry) => {
-      const cls = allClasses.find((c) => c.id === entry.classId);
-      const grade = cls ? allGrades.find((g) => g.id === cls.gradeId) : null;
-      const subject = entry.subjectId ? allSubjects.find((s) => s.id === entry.subjectId) : null;
+      const cls = classById.get(entry.classId);
+      const grade = cls ? gradeById.get(cls.gradeId) : null;
+      const subject = entry.subjectId ? subjectById.get(entry.subjectId) : null;
       const teacherIds = teachersByScheduleId.get(entry.id) ?? (entry.teacherId ? [entry.teacherId] : []);
-      const teacherRows = teacherIds
-        .map((id) => allTeachers.find((teacher) => teacher.id === id))
-        .filter(Boolean) as Array<{ id: number; name: string | null; surname: string | null; patronymic: string | null }>;
+      const teacherRows = teacherIds.map((id) => teacherById.get(id)).filter(isDefined);
 
       const teacherNames = teacherRows.map(toTeacherShortName).filter(Boolean);
       const teacherFullNames = teacherRows.map(toTeacherFullName).filter(Boolean);
 
-      const rooms = allLessonClassrooms
-        .filter((lc) => lc.scheduleId === entry.id)
-        .map((lc) => allClassrooms.find((cr) => cr.id === lc.classroomId))
-        .filter(Boolean);
-      const hasChanges = allChanges.some((ch) => ch.scheduleId === entry.id);
+      const rooms = (classroomsByScheduleId.get(entry.id) ?? [])
+        .map((classroomId) => classroomById.get(classroomId))
+        .filter(isDefined);
+      const hasChanges = changedScheduleIds.has(entry.id);
 
       return {
         id: entry.id,
@@ -86,14 +100,14 @@ export async function GET() {
         teacherFullName: teacherFullNames.join(", "),
         teacherNames,
         teacherFullNames,
-        classrooms: rooms.map((r: any) => r.number),
+        classrooms: rooms.map((room) => room.number),
         hasChanges,
       };
     });
 
     const classList = allClasses
       .map((c) => {
-        const grade = allGrades.find((g) => g.id === c.gradeId);
+        const grade = gradeById.get(c.gradeId);
         return {
           id: c.id,
           displayName: grade ? `${grade.number}${c.letter}` : c.letter,
@@ -111,7 +125,7 @@ export async function GET() {
       classList,
       schedule: scheduleData,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

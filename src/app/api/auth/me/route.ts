@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { apiErrorResponse } from "@/lib/api/route-helpers";
 
 export async function GET() {
   try {
@@ -8,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ user: null });
     }
     return NextResponse.json({ user: session });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

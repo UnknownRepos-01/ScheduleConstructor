@@ -13,6 +13,12 @@ import { canAccessAdminPanel, ROLE_TEACHER } from "@/lib/access";
 import { useTheme } from "@/components/hooks/use-theme";
 import { useCurrentUserQuery, useLoginMutation } from "@/lib/react-query";
 
+const getPostLoginPath = (roleName: string | undefined) => {
+  if (roleName === ROLE_TEACHER) return "/schedule/teachers";
+  if (canAccessAdminPanel(roleName)) return "/admin";
+  return "/schedule";
+};
+
 export default function LoginPage() {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -28,17 +34,7 @@ export default function LoginPage() {
     const user = currentUserData?.user;
     if (!user) return;
 
-    if (user.roleName === ROLE_TEACHER) {
-      router.replace("/schedule/teachers");
-      return;
-    }
-
-    if (canAccessAdminPanel(user.roleName)) {
-      router.replace("/admin");
-      return;
-    }
-
-    router.replace("/schedule");
+    router.replace(getPostLoginPath(user.roleName));
   }, [currentUserData?.user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,14 +44,7 @@ export default function LoginPage() {
 
     try {
       const data = await loginMutation.mutateAsync({ login, password });
-
-      if (data.user?.roleName === ROLE_TEACHER) {
-        router.push("/schedule/teachers");
-      } else if (canAccessAdminPanel(data.user?.roleName)) {
-        router.push("/admin");
-      } else {
-        router.push("/schedule");
-      }
+      router.push(getPostLoginPath(data.user?.roleName));
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 403 && err.data?.pending) {

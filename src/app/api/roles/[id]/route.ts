@@ -1,21 +1,25 @@
-﻿import { NextResponse } from "next/server";
-import { db } from "../../../../db/index";
-import { roles } from "../../../../db/schema";
 import { eq } from "drizzle-orm";
-import { AdminCheck, getSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
 
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
+import { db } from "@/db/index";
+import { roles } from "@/db/schema";
+import {
+  apiErrorResponse,
+  invalidIdResponse,
+  parseRouteId,
+  requireAdmin,
+} from "@/lib/api/route-helpers";
+
 const NOT_FOUND_MESSAGE = "Роль не найдена";
+const NAME_REQUIRED_MESSAGE = "Название роли обязательно";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const roleId = parseInt(params.id, 10);
-    if (isNaN(roleId)) return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
+    const roleId = parseRouteId(params.id);
+    if (!roleId) return invalidIdResponse();
 
     const role = await db.select().from(roles).where(eq(roles.id, roleId));
     if (role.length === 0) {
@@ -23,22 +27,21 @@ export async function GET(request: Request, { params }: { params: { id: string }
     }
 
     return NextResponse.json(role[0]);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const roleId = parseInt(params.id, 10);
-    if (isNaN(roleId)) return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
+    const roleId = parseRouteId(params.id);
+    if (!roleId) return invalidIdResponse();
 
     const body = await request.json();
-    if (!body.name) return NextResponse.json({ error: "Название роли обязательно" }, { status: 400 });
+    if (!body.name) return NextResponse.json({ error: NAME_REQUIRED_MESSAGE }, { status: 400 });
 
     const [result] = await db.update(roles).set({ name: body.name }).where(eq(roles.id, roleId));
     if (result.affectedRows === 0) {
@@ -46,19 +49,18 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
 
     return NextResponse.json({ message: "Роль успешно обновлена" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const roleId = parseInt(params.id, 10);
-    if (isNaN(roleId)) return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
+    const roleId = parseRouteId(params.id);
+    if (!roleId) return invalidIdResponse();
 
     const [result] = await db.delete(roles).where(eq(roles.id, roleId));
     if (result.affectedRows === 0) {
@@ -66,7 +68,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     }
 
     return NextResponse.json({ message: "Роль успешно удалена" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

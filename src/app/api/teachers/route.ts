@@ -2,36 +2,54 @@
 import { NextResponse } from "next/server";
 
 import { db } from "@/db/index";
-import { classrooms, roles, teacherDefaultClassrooms, users } from "@/db/schema";
-import { AdminCheck, AdminOnlyCheck, getSession, hashPassword, validateNewPassword } from "@/lib/auth";
+import { classrooms, roles, subjects, teacherDefaultClassrooms, teacherSubjects, users } from "@/db/schema";
+import { AdminOnlyCheck, hashPassword, validateNewPassword } from "@/lib/auth";
 import { ROLE_MANAGER, ROLE_TEACHER } from "@/lib/access";
+import { apiErrorResponse, requireAdmin, requireAdminSession } from "@/lib/api/route-helpers";
 
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
+const normalizeIds = (value: unknown): number[] => {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((item) => Number.parseInt(String(item), 10))
+        .filter((item) => Number.isFinite(item) && item > 0),
+    ),
+  );
+};
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const teacherRole = await db.select().from(roles).where(eq(roles.name, ROLE_TEACHER));
     if (teacherRole.length === 0) {
       return NextResponse.json([]);
     }
 
-    const [teachers, defaults, classroomRows] = await Promise.all([
+    const [teachers, defaults, classroomRows, teacherSubjectRows, subjectRows] = await Promise.all([
       db.select().from(users).where(eq(users.roleId, teacherRole[0].id)),
       db.select().from(teacherDefaultClassrooms),
       db.select().from(classrooms),
+      db.select().from(teacherSubjects),
+      db.select().from(subjects),
     ]);
 
     const defaultsByTeacherId = new Map(defaults.map((row) => [row.teacherId, row.classroomId]));
     const classroomById = new Map(classroomRows.map((row) => [row.id, row.number]));
+    const subjectById = new Map(subjectRows.map((row) => [row.id, row.name]));
+    const subjectIdsByTeacherId = new Map<number, number[]>();
+    teacherSubjectRows.forEach((row) => {
+      const current = subjectIdsByTeacherId.get(row.teacherId) ?? [];
+      current.push(row.subjectId);
+      subjectIdsByTeacherId.set(row.teacherId, current);
+    });
 
     return NextResponse.json(
       teachers.map((teacher) => {
         const defaultClassroomId = defaultsByTeacherId.get(teacher.id) ?? null;
+        const subjectIds = subjectIdsByTeacherId.get(teacher.id) ?? [];
 
         return {
           id: teacher.id,
@@ -42,20 +60,21 @@ export async function GET() {
           defaultClassroomId,
           defaultClassroomNumber:
             defaultClassroomId !== null ? classroomById.get(defaultClassroomId) ?? null : null,
+          subjectIds,
+          subjectNames: subjectIds.map((subjectId) => subjectById.get(subjectId)).filter(Boolean),
         };
       }),
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Неизвестная ошибка";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiErrorResponse(err, "Неизвестная ошибка");
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const { error: adminError, session } = await requireAdminSession();
+    if (adminError) return adminError;
+    if (!session) return apiErrorResponse(null, "Неизвестная ошибка");
 
     const body = await request.json();
     const { name, surname, patronymic, login, password } = body;
@@ -66,6 +85,7 @@ export async function POST(request: Request) {
       defaultClassroomIdRaw === null || defaultClassroomIdRaw === undefined
         ? null
         : Number.parseInt(String(defaultClassroomIdRaw), 10);
+    const subjectIds = normalizeIds(body.subjectIds);
 
     if (!name || !surname || !login || !password) {
       return NextResponse.json({ error: "Заполните все обязательные поля" }, { status: 400 });
@@ -104,12 +124,18 @@ export async function POST(request: Request) {
       });
     }
 
+    if (roleName === ROLE_TEACHER && subjectIds.length > 0) {
+      for (const subjectId of subjectIds) {
+        await db.insert(teacherSubjects).values({ teacherId: result.insertId, subjectId });
+      }
+    }
+
     return NextResponse.json({ message: "Пользователь создан", insertId: result.insertId }, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Неизвестная ошибка";
     if (message.includes("Duplicate")) {
       return NextResponse.json({ error: "Пользователь с таким логином уже существует" }, { status: 409 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiErrorResponse(err, "Неизвестная ошибка");
   }
 }

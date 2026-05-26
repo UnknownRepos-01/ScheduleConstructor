@@ -36,4 +36,10 @@ export const queryKeys = {
     ipAuths: ["security", "ip-auths"] as const,
     selfPendingIpAuths: ["security", "self-pending-ip-auths"] as const,
   },
+  curriculumPlans: {
+    all: ["curriculum-plans"] as const,
+  },
+  teachingAssignments: {
+    all: ["teaching-assignments"] as const,
+  },
 };

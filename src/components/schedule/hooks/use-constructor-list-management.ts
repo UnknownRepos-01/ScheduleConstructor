@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { CONSTRUCTOR_TEXT } from "@/components/schedule/constructor-text";
 import type { ListItem, ScheduleEntry } from "@/components/schedule/constructor-types";
@@ -13,6 +13,18 @@ import {
 } from "@/lib/react-query";
 
 type ListModalMode = "create" | "rename" | "duplicate";
+
+const LIST_MODAL_TITLES: Record<ListModalMode, string> = {
+  create: "Создать новый лист расписания",
+  rename: "Переименовать лист",
+  duplicate: "Дублировать лист",
+};
+
+const LIST_MODAL_SUBMIT_LABELS: Record<ListModalMode, string> = {
+  create: "Создать",
+  rename: "Сохранить",
+  duplicate: "Дублировать",
+};
 
 type UseConstructorListManagementParams = {
   selectedListId: number | null;
@@ -128,17 +140,10 @@ export function useConstructorListManagement({
     }
   }, [deleteListMutation, selectedList, selectedListId, setSchedule, setSelectedListId]);
 
-  const listModalTitle = useMemo(() => {
-    if (listModalMode === "rename") return "Переименовать лист";
-    if (listModalMode === "duplicate") return "Дублировать лист";
-    return "Создать новый лист расписания";
-  }, [listModalMode]);
-
-  const listModalSubmitLabel = useMemo(() => {
-    if (listModalMode === "rename") return "Сохранить";
-    if (listModalMode === "duplicate") return "Дублировать";
-    return "Создать";
-  }, [listModalMode]);
+  const listModalTitle = listModalMode ? LIST_MODAL_TITLES[listModalMode] : LIST_MODAL_TITLES.create;
+  const listModalSubmitLabel = listModalMode
+    ? LIST_MODAL_SUBMIT_LABELS[listModalMode]
+    : LIST_MODAL_SUBMIT_LABELS.create;
 
   const isListModalSubmitting =
     createListMutation.isPending || updateListMutation.isPending || duplicateListMutation.isPending;

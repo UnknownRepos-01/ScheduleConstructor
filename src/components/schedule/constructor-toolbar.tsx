@@ -17,6 +17,8 @@ type ConstructorToolbarProps = {
   onRenameList: () => void;
   onDuplicateList: () => void;
   onDeleteList: () => void;
+  onGenerateNewSchedule: () => void;
+  onAppendSchedule: () => void;
 };
 
 export function ConstructorToolbar({
@@ -30,6 +32,8 @@ export function ConstructorToolbar({
   onRenameList,
   onDuplicateList,
   onDeleteList,
+  onGenerateNewSchedule,
+  onAppendSchedule,
 }: ConstructorToolbarProps) {
   const hasSelectedList = !!selectedListId;
 
@@ -79,6 +83,16 @@ export function ConstructorToolbar({
       <Button size="sm" variant="danger" onClick={onDeleteList} disabled={!hasSelectedList}>
         <AppIcon name="delete" className="h-4 w-4" />
         Удалить
+      </Button>
+
+      <Button size="sm" variant="primary" onClick={onGenerateNewSchedule} disabled={!hasSelectedList}>
+        <AppIcon name="schedule" className="h-4 w-4" />
+        Сгенерировать новое расписание
+      </Button>
+
+      <Button size="sm" variant="success" onClick={onAppendSchedule} disabled={!hasSelectedList}>
+        <AppIcon name="add" className="h-4 w-4" />
+        Дополнить расписание
       </Button>
 
       <div className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] text-text-tertiary">

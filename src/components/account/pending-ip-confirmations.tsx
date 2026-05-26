@@ -18,19 +18,22 @@ export function PendingIpConfirmations() {
   const records = data?.records ?? [];
   const canConfirm = data?.canConfirmFromCurrentIp ?? false;
 
-  const handleConfirm = async (id: number) => {
+  const resetFeedback = () => {
     setError(null);
     setSuccess(null);
+  };
+
+  const getErrorMessage = (err: unknown) =>
+    err instanceof ApiError ? err.message : "Не удалось подтвердить IP-адрес";
+
+  const handleConfirm = async (id: number) => {
+    resetFeedback();
 
     try {
       const response = await confirmMutation.mutateAsync({ id });
       setSuccess(response.message);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-        return;
-      }
-      setError("Не удалось подтвердить IP-адрес");
+      setError(getErrorMessage(err));
     }
   };
 
@@ -73,7 +76,12 @@ export function PendingIpConfirmations() {
                 <Badge>{record.ip}</Badge>
                 <span className="text-text-tertiary">{new Date(record.createdAt).toLocaleString("ru-RU")}</span>
               </div>
-              <Button size="sm" variant="success" onClick={() => handleConfirm(record.id)} disabled={confirmMutation.isPending || !canConfirm}>
+              <Button
+                size="sm"
+                variant="success"
+                onClick={() => handleConfirm(record.id)}
+                disabled={confirmMutation.isPending || !canConfirm}
+              >
                 Подтвердить
               </Button>
             </div>

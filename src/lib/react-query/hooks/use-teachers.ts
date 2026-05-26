@@ -25,6 +25,11 @@ interface UpdateTeacherVariables {
   payload: UpdateTeacherPayload;
 }
 
+const invalidateTeacherCaches = (queryClient: ReturnType<typeof useQueryClient>) => {
+  queryClient.invalidateQueries({ queryKey: queryKeys.teachers.all });
+  queryClient.invalidateQueries({ queryKey: queryKeys.managers.all });
+};
+
 export const useCreateTeacherMutation = () => {
   const queryClient = useQueryClient();
 
@@ -42,6 +47,8 @@ export const useCreateTeacherMutation = () => {
         login: payload.login,
         defaultClassroomId: payload.defaultClassroomId ?? null,
         defaultClassroomNumber: null,
+        subjectIds: payload.subjectIds ?? [],
+        subjectNames: [],
       };
 
       queryClient.setQueryData<Teacher[]>(queryKeys.teachers.all, [...previousTeachers, optimisticTeacher]);
@@ -54,8 +61,7 @@ export const useCreateTeacherMutation = () => {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.teachers.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.managers.all });
+      invalidateTeacherCaches(queryClient);
     },
   });
 };
@@ -82,8 +88,7 @@ export const useUpdateTeacherMutation = () => {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.teachers.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.managers.all });
+      invalidateTeacherCaches(queryClient);
     },
   });
 };
@@ -110,8 +115,7 @@ export const useDeleteTeacherMutation = () => {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.teachers.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.managers.all });
+      invalidateTeacherCaches(queryClient);
     },
   });
 };

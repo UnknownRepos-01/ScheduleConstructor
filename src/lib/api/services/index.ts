@@ -10,3 +10,5 @@ export * from "@/lib/api/services/schedule.service";
 export * from "@/lib/api/services/stats.service";
 export * from "@/lib/api/services/manager.service";
 export * from "@/lib/api/services/ip-auth.service";
+export * from "@/lib/api/services/curriculum-plan.service";
+export * from "@/lib/api/services/teaching-assignment.service";

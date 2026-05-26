@@ -1,29 +1,25 @@
-﻿import { NextResponse } from "next/server";
-import { db } from "../../../db/index";
-import { lists } from "../../../db/schema";
-import { AdminCheck, getSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
 
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
+import { db } from "@/db/index";
+import { lists } from "@/db/schema";
+import { apiErrorResponse, requireAdmin } from "@/lib/api/route-helpers";
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const all = await db.select().from(lists);
     return NextResponse.json(all);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const body = await request.json();
     if (!body.name) {
@@ -32,7 +28,7 @@ export async function POST(request: Request) {
 
     const [result] = await db.insert(lists).values({ name: body.name, isActive: false });
     return NextResponse.json({ message: "Лист успешно создан", insertId: result.insertId }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

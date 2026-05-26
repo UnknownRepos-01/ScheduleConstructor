@@ -1,23 +1,19 @@
-﻿import { desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "@/db/index";
 import { ipAuths, statuses, users } from "@/db/schema";
-import { AdminOnlyCheck, getIpAuthStatusIds, getSession } from "@/lib/auth";
+import { updateIpAuthApproval } from "@/lib/api/ip-auth-status";
+import { apiErrorResponse, invalidIdResponse, requireAdminOnly } from "@/lib/api/route-helpers";
 
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
+const FORBIDDEN_MESSAGE = "Только администратор может подтверждать IP-входы";
+const NOT_FOUND_MESSAGE = "Запись не найдена";
+const UNKNOWN_ERROR_MESSAGE = "Неизвестная ошибка";
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    }
-
-    if (!(await AdminOnlyCheck(session))) {
-      return NextResponse.json({ error: "Только администратор может подтверждать IP-входы" }, { status: 403 });
-    }
+    const { error: adminError } = await requireAdminOnly(FORBIDDEN_MESSAGE);
+    if (adminError) return adminError;
 
     const rows = await db.select().from(ipAuths).orderBy(desc(ipAuths.createdAt));
 
@@ -64,44 +60,29 @@ export async function GET() {
       })),
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Неизвестная ошибка";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiErrorResponse(err, UNKNOWN_ERROR_MESSAGE);
   }
 }
 
 export async function PATCH(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    }
-
-    if (!(await AdminOnlyCheck(session))) {
-      return NextResponse.json({ error: "Только администратор может подтверждать IP-входы" }, { status: 403 });
-    }
+    const { error: adminError } = await requireAdminOnly(FORBIDDEN_MESSAGE);
+    if (adminError) return adminError;
 
     const body = await request.json();
     const id = Number.parseInt(String(body.id), 10);
 
-    if (Number.isNaN(id)) {
-      return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
-    }
+    if (Number.isNaN(id)) return invalidIdResponse();
 
     const approved = body.approved !== false;
-    const { confirmedStatusId, pendingStatusId } = await getIpAuthStatusIds();
-
-    const [result] = await db
-      .update(ipAuths)
-      .set({ statusId: approved ? confirmedStatusId : pendingStatusId, createdAt: new Date() })
-      .where(eq(ipAuths.id, id));
+    const result = await updateIpAuthApproval(id, approved);
 
     if (result.affectedRows === 0) {
-      return NextResponse.json({ error: "Запись не найдена" }, { status: 404 });
+      return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 });
     }
 
     return NextResponse.json({ message: approved ? "IP подтверждён" : "IP переведён в ожидание" });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Неизвестная ошибка";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiErrorResponse(err, UNKNOWN_ERROR_MESSAGE);
   }
 }

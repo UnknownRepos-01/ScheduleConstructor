@@ -8,8 +8,8 @@ import {
   buildSubjectNameById,
   buildTeacherOccupancy,
   buildTeacherShortNameById,
-  createResourceLoadKey,
   getEntryTeacherIds,
+  getResourceBusyCount,
   normalizeScheduleEntries,
 } from "@/components/schedule/constructor-entry-utils";
 import { createCellKey } from "@/components/schedule/constructor-dnd-utils";
@@ -27,11 +27,36 @@ import {
   useSubjectsQuery,
   useTeachersQuery,
   useUpsertScheduleCellMutation,
+  useGenerateScheduleMutation,
 } from "@/lib/react-query";
 
 type IdEntity = { id: number };
+type CellResourceMatcher = (entry: ScheduleEntry, resourceId: number) => boolean;
 
 const toIdMap = <T extends IdEntity>(items: T[]): Map<number, T> => new Map(items.map((item) => [item.id, item]));
+
+const showGenerationWarnings = (warnings?: string[]) => {
+  if (!warnings || warnings.length === 0) return;
+  alert(`Расписание сохранено, но есть компромиссы:\n${warnings.slice(0, 8).join("\n")}`);
+};
+
+function isEditedResourceInCell(
+  scheduleById: Map<number, ScheduleEntry>,
+  resourceId: number,
+  cell: { day: number; lessonNumber: number },
+  containsResource: CellResourceMatcher,
+  excludeEntryId?: number,
+): boolean {
+  if (!excludeEntryId) return false;
+  const editedEntry = scheduleById.get(excludeEntryId);
+
+  return (
+    !!editedEntry &&
+    containsResource(editedEntry, resourceId) &&
+    editedEntry.day === cell.day &&
+    editedEntry.lessonNumber === cell.lessonNumber
+  );
+}
 
 export function useConstructorPageModel() {
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
@@ -46,6 +71,7 @@ export function useConstructorPageModel() {
 
   const upsertScheduleMutation = useUpsertScheduleCellMutation(selectedListId);
   const deleteScheduleMutation = useDeleteScheduleCellMutation(selectedListId);
+  const generateScheduleMutation = useGenerateScheduleMutation(selectedListId);
 
   const lists = (listsQuery.data ?? []) as ListItem[];
   const classes = (classesQuery.data ?? []) as ClassItem[];
@@ -117,36 +143,40 @@ export function useConstructorPageModel() {
 
   const getTeacherBusyCount = useCallback(
     (teacherId: number, cell: { day: number; lessonNumber: number }, excludeEntryId?: number) => {
-      const key = createResourceLoadKey(teacherId, cell.day, cell.lessonNumber);
-      const total = teacherOccupancy.get(key) || 0;
-      if (!excludeEntryId) return total;
+      const excludeCurrent = isEditedResourceInCell(
+        scheduleById,
+        teacherId,
+        cell,
+        (entry, resourceId) => getEntryTeacherIds(entry).includes(resourceId),
+        excludeEntryId,
+      );
 
-      const editedEntry = scheduleById.get(excludeEntryId);
-      const shouldExcludeCurrent =
-        !!editedEntry &&
-        getEntryTeacherIds(editedEntry).includes(teacherId) &&
-        editedEntry.day === cell.day &&
-        editedEntry.lessonNumber === cell.lessonNumber;
-
-      return shouldExcludeCurrent ? Math.max(0, total - 1) : total;
+      return getResourceBusyCount(
+        teacherOccupancy,
+        teacherId,
+        cell,
+        excludeCurrent,
+      );
     },
     [scheduleById, teacherOccupancy],
   );
 
   const getClassroomBusyCount = useCallback(
     (classroomId: number, cell: { day: number; lessonNumber: number }, excludeEntryId?: number) => {
-      const key = createResourceLoadKey(classroomId, cell.day, cell.lessonNumber);
-      const total = classroomOccupancy.get(key) || 0;
-      if (!excludeEntryId) return total;
+      const excludeCurrent = isEditedResourceInCell(
+        scheduleById,
+        classroomId,
+        cell,
+        (entry, resourceId) => entry.classroomIds.includes(resourceId),
+        excludeEntryId,
+      );
 
-      const editedEntry = scheduleById.get(excludeEntryId);
-      const shouldExcludeCurrent =
-        !!editedEntry &&
-        editedEntry.classroomIds.includes(classroomId) &&
-        editedEntry.day === cell.day &&
-        editedEntry.lessonNumber === cell.lessonNumber;
-
-      return shouldExcludeCurrent ? Math.max(0, total - 1) : total;
+      return getResourceBusyCount(
+        classroomOccupancy,
+        classroomId,
+        cell,
+        excludeCurrent,
+      );
     },
     [classroomOccupancy, scheduleById],
   );
@@ -167,6 +197,62 @@ export function useConstructorPageModel() {
     },
     [handleDeleteFromCell],
   );
+
+  const handleGenerateSchedule = useCallback(async () => {
+    if (!selectedListId) return;
+
+    const replaceExisting =
+      schedule.length > 0
+        ? confirm("В текущем листе уже есть расписание. Заменить существующие уроки автоматически сгенерированными?")
+        : false;
+    if (schedule.length > 0 && !replaceExisting) return;
+
+    try {
+      const response = await generateScheduleMutation.mutateAsync({ listId: selectedListId, replaceExisting });
+      setSchedule(normalizeScheduleEntries(response.entries));
+    } catch (error: any) {
+      alert(error.message || "Не удалось сгенерировать расписание");
+    }
+  }, [generateScheduleMutation, schedule.length, selectedListId]);
+
+  const handleGenerateNewSchedule = useCallback(async () => {
+    if (!selectedListId) return;
+
+    if (
+      schedule.length > 0 &&
+      !confirm("В текущем листе уже есть расписание. Заменить существующие уроки автоматически сгенерированными?")
+    ) {
+      return;
+    }
+
+    try {
+      const response = await generateScheduleMutation.mutateAsync({
+        listId: selectedListId,
+        replaceExisting: true,
+        mode: "replace",
+      });
+      setSchedule(normalizeScheduleEntries(response.entries));
+      showGenerationWarnings(response.warnings);
+    } catch (error: any) {
+      alert(error.message || "Не удалось сгенерировать расписание");
+    }
+  }, [generateScheduleMutation, schedule.length, selectedListId]);
+
+  const handleAppendSchedule = useCallback(async () => {
+    if (!selectedListId) return;
+
+    try {
+      const response = await generateScheduleMutation.mutateAsync({
+        listId: selectedListId,
+        append: true,
+        mode: "append",
+      });
+      setSchedule(normalizeScheduleEntries(response.entries));
+      showGenerationWarnings(response.warnings);
+    } catch (error: any) {
+      alert(error.message || "Не удалось дополнить расписание");
+    }
+  }, [generateScheduleMutation, selectedListId]);
 
   const listManagement = useConstructorListManagement({
     selectedListId,
@@ -205,6 +291,7 @@ export function useConstructorPageModel() {
   const saving =
     upsertScheduleMutation.isPending ||
     deleteScheduleMutation.isPending ||
+    generateScheduleMutation.isPending ||
     listManagement.listMutationsSaving;
 
   return {
@@ -226,6 +313,8 @@ export function useConstructorPageModel() {
       openRenameListModal: listManagement.openRenameListModal,
       openDuplicateListModal: listManagement.openDuplicateListModal,
       handleDeleteList: listManagement.handleDeleteList,
+      handleGenerateNewSchedule,
+      handleAppendSchedule,
     },
     listModal: {
       isOpen: listManagement.listModalMode !== null,

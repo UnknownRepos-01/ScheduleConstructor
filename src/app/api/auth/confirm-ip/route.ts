@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/db/index";
 import { ipAuths } from "@/db/schema";
+import { apiErrorResponse } from "@/lib/api/route-helpers";
+import { setSessionCookie } from "@/lib/api/session-cookie";
 import { createSessionToken, getClientIp, getIpAuthStatusIds, validateUserCredentials } from "@/lib/auth";
 
 export async function POST(request: Request) {
@@ -49,17 +51,10 @@ export async function POST(request: Request) {
       user,
     });
 
-    response.cookies.set("schedule_session", token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      maxAge: 86400,
-      path: "/",
-    });
+    setSessionCookie(response.cookies, token);
 
     return response;
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Неизвестная ошибка";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiErrorResponse(err, "Неизвестная ошибка");
   }
 }

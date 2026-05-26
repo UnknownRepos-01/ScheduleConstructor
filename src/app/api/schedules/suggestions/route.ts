@@ -2,21 +2,27 @@
 
 import { db } from "@/db/index";
 import { lessonClassrooms, lessonTeachers, schedules } from "@/db/schema";
-import { AdminCheck, getSession } from "@/lib/auth";
-
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
+import { apiErrorResponse, requireAdmin } from "@/lib/api/route-helpers";
 
 type SubjectSuggestion = {
   subjectId: number;
   count: number;
 };
 
+const incrementCounter = (counter: Map<string, number>, key: string) => {
+  counter.set(key, (counter.get(key) ?? 0) + 1);
+};
+
+const appendToMapList = <TValue>(map: Map<number, TValue[]>, key: number, value: TValue) => {
+  const existing = map.get(key) ?? [];
+  existing.push(value);
+  map.set(key, existing);
+};
+
 export async function GET(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const { searchParams } = new URL(request.url);
     const classIdRaw = searchParams.get("classId");
@@ -38,18 +44,10 @@ export async function GET(request: Request) {
     ]);
 
     const teachersByScheduleId = new Map<number, number[]>();
-    lessonTeacherRows.forEach((row) => {
-      const existing = teachersByScheduleId.get(row.scheduleId) ?? [];
-      existing.push(row.teacherId);
-      teachersByScheduleId.set(row.scheduleId, existing);
-    });
+    lessonTeacherRows.forEach((row) => appendToMapList(teachersByScheduleId, row.scheduleId, row.teacherId));
 
     const classroomsByScheduleId = new Map<number, number[]>();
-    lessonClassroomRows.forEach((row) => {
-      const existing = classroomsByScheduleId.get(row.scheduleId) ?? [];
-      existing.push(row.classroomId);
-      classroomsByScheduleId.set(row.scheduleId, existing);
-    });
+    lessonClassroomRows.forEach((row) => appendToMapList(classroomsByScheduleId, row.scheduleId, row.classroomId));
 
     const subjectTeacherCounter = new Map<string, number>();
     const classTeacherCounter = new Map<string, number>();
@@ -62,21 +60,21 @@ export async function GET(request: Request) {
       teacherIds.forEach((currentTeacherId) => {
         if (row.subjectId) {
           const key = `${row.subjectId}:${currentTeacherId}`;
-          subjectTeacherCounter.set(key, (subjectTeacherCounter.get(key) ?? 0) + 1);
+          incrementCounter(subjectTeacherCounter, key);
         }
 
         const classTeacherKey = `${row.classId}:${currentTeacherId}`;
-        classTeacherCounter.set(classTeacherKey, (classTeacherCounter.get(classTeacherKey) ?? 0) + 1);
+        incrementCounter(classTeacherCounter, classTeacherKey);
 
         if (row.subjectId) {
           const key = `${row.classId}:${currentTeacherId}:${row.subjectId}`;
-          classTeacherSubjectCounter.set(key, (classTeacherSubjectCounter.get(key) ?? 0) + 1);
+          incrementCounter(classTeacherSubjectCounter, key);
         }
 
         const classrooms = classroomsByScheduleId.get(row.id) ?? [];
         classrooms.forEach((classroomId) => {
           const key = `${row.classId}:${currentTeacherId}:${classroomId}`;
-          classTeacherClassroomCounter.set(key, (classTeacherClassroomCounter.get(key) ?? 0) + 1);
+          incrementCounter(classTeacherClassroomCounter, key);
         });
       });
     });
@@ -140,7 +138,7 @@ export async function GET(request: Request) {
       classroomsByTeacher: teacherId ? classroomsByTeacher : [],
       teachersByClass,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

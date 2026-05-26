@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { clearSessionCookie } from "@/lib/api/session-cookie";
+
 export async function POST() {
   const response = NextResponse.json({ message: "Выход выполнен" });
-  response.cookies.set("schedule_session", "", {
-    httpOnly: true,
-    secure: false,
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
+  clearSessionCookie(response.cookies);
   return response;
 }

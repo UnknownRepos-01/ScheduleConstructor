@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 import { CreateClassPayload, UpdateClassPayload, classService } from "@/lib/api/services/class.service";
 import {
@@ -24,33 +25,51 @@ const referenceQueryOptions = {
   refetchOnWindowFocus: false as const,
 };
 
-export const useGradesQuery = () =>
-  useQuery({
-    queryKey: queryKeys.grades.all,
-    queryFn: gradeService.list,
-    ...referenceQueryOptions,
-  });
+type UpdateVariables<TPayload> = {
+  id: number;
+  payload: TPayload;
+};
 
-export const useClassesQuery = () =>
-  useQuery({
-    queryKey: queryKeys.classes.all,
-    queryFn: classService.list,
-    ...referenceQueryOptions,
-  });
+type InvalidatingMutationOptions<TVariables, TResult> = {
+  mutationFn: (variables: TVariables) => Promise<TResult>;
+  keysToInvalidate: readonly QueryKey[];
+};
 
-export const useSubjectsQuery = () =>
-  useQuery({
-    queryKey: queryKeys.subjects.all,
-    queryFn: subjectService.list,
-    ...referenceQueryOptions,
-  });
+const createReferenceQueryHook =
+  <TResult,>(queryKey: QueryKey, queryFn: () => Promise<TResult>) =>
+  () =>
+    useQuery({
+      queryKey,
+      queryFn,
+      ...referenceQueryOptions,
+    });
 
-export const useClassroomsQuery = () =>
-  useQuery({
-    queryKey: queryKeys.classrooms.all,
-    queryFn: classroomService.list,
-    ...referenceQueryOptions,
+const invalidateKeys = (queryClient: QueryClient, keys: readonly QueryKey[]) => {
+  keys.forEach((queryKey) => {
+    queryClient.invalidateQueries({ queryKey });
   });
+};
+
+const useInvalidatingMutation = <TVariables, TResult>({
+  mutationFn,
+  keysToInvalidate,
+}: InvalidatingMutationOptions<TVariables, TResult>) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: () => invalidateKeys(queryClient, keysToInvalidate),
+  });
+};
+
+const listChangeInvalidationKeys = [queryKeys.lists.all, queryKeys.schedule.public] as const;
+
+export const useGradesQuery = createReferenceQueryHook(queryKeys.grades.all, gradeService.list);
+
+export const useClassesQuery = createReferenceQueryHook(queryKeys.classes.all, classService.list);
+
+export const useSubjectsQuery = createReferenceQueryHook(queryKeys.subjects.all, subjectService.list);
+
+export const useClassroomsQuery = createReferenceQueryHook(queryKeys.classrooms.all, classroomService.list);
 
 export const useListsQuery = () =>
   useQuery({
@@ -62,161 +81,105 @@ export const useListsQuery = () =>
     refetchOnWindowFocus: false,
   });
 
-export const useCreateGradeMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
+export const useCreateGradeMutation = () =>
+  useInvalidatingMutation({
     mutationFn: (payload: CreateGradePayload) => gradeService.create(payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.grades.all }),
+    keysToInvalidate: [queryKeys.grades.all],
   });
-};
 
-export const useUpdateGradeMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: UpdateGradePayload }) => gradeService.update(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.grades.all }),
+export const useUpdateGradeMutation = () =>
+  useInvalidatingMutation({
+    mutationFn: ({ id, payload }: UpdateVariables<UpdateGradePayload>) => gradeService.update(id, payload),
+    keysToInvalidate: [queryKeys.grades.all],
   });
-};
 
-export const useDeleteGradeMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => gradeService.remove(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.grades.all }),
+export const useDeleteGradeMutation = () =>
+  useInvalidatingMutation({
+    mutationFn: gradeService.remove,
+    keysToInvalidate: [queryKeys.grades.all],
   });
-};
 
-export const useCreateClassMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
+export const useCreateClassMutation = () =>
+  useInvalidatingMutation({
     mutationFn: (payload: CreateClassPayload) => classService.create(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.classes.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedule.public });
-    },
+    keysToInvalidate: [queryKeys.classes.all, queryKeys.schedule.public],
   });
-};
 
-export const useUpdateClassMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: UpdateClassPayload }) => classService.update(id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.classes.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedule.public });
-    },
+export const useUpdateClassMutation = () =>
+  useInvalidatingMutation({
+    mutationFn: ({ id, payload }: UpdateVariables<UpdateClassPayload>) => classService.update(id, payload),
+    keysToInvalidate: [queryKeys.classes.all, queryKeys.schedule.public],
   });
-};
 
-export const useDeleteClassMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => classService.remove(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.classes.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedule.public });
-    },
+export const useDeleteClassMutation = () =>
+  useInvalidatingMutation({
+    mutationFn: classService.remove,
+    keysToInvalidate: [queryKeys.classes.all, queryKeys.schedule.public],
   });
-};
 
-export const useCreateSubjectMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
+export const useCreateSubjectMutation = () =>
+  useInvalidatingMutation({
     mutationFn: (payload: CreateSubjectPayload) => subjectService.create(payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.subjects.all }),
+    keysToInvalidate: [queryKeys.subjects.all],
   });
-};
 
-export const useUpdateSubjectMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: UpdateSubjectPayload }) => subjectService.update(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.subjects.all }),
+export const useUpdateSubjectMutation = () =>
+  useInvalidatingMutation({
+    mutationFn: ({ id, payload }: UpdateVariables<UpdateSubjectPayload>) => subjectService.update(id, payload),
+    keysToInvalidate: [queryKeys.subjects.all],
   });
-};
 
-export const useDeleteSubjectMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => subjectService.remove(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.subjects.all }),
+export const useDeleteSubjectMutation = () =>
+  useInvalidatingMutation({
+    mutationFn: subjectService.remove,
+    keysToInvalidate: [queryKeys.subjects.all],
   });
-};
 
-export const useCreateClassroomMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
+export const useCreateClassroomMutation = () =>
+  useInvalidatingMutation({
     mutationFn: (payload: CreateClassroomPayload) => classroomService.create(payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.classrooms.all }),
+    keysToInvalidate: [queryKeys.classrooms.all],
   });
-};
 
-export const useUpdateClassroomMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: UpdateClassroomPayload }) =>
-      classroomService.update(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.classrooms.all }),
+export const useUpdateClassroomMutation = () =>
+  useInvalidatingMutation({
+    mutationFn: ({ id, payload }: UpdateVariables<UpdateClassroomPayload>) => classroomService.update(id, payload),
+    keysToInvalidate: [queryKeys.classrooms.all],
   });
-};
 
-export const useDeleteClassroomMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => classroomService.remove(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.classrooms.all }),
+export const useDeleteClassroomMutation = () =>
+  useInvalidatingMutation({
+    mutationFn: classroomService.remove,
+    keysToInvalidate: [queryKeys.classrooms.all],
   });
-};
 
-export const useCreateListMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
+export const useCreateListMutation = () =>
+  useInvalidatingMutation({
     mutationFn: (payload: CreateListPayload) => listService.create(payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.lists.all }),
+    keysToInvalidate: [queryKeys.lists.all],
   });
-};
 
-export const useActivateListMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
+export const useActivateListMutation = () =>
+  useInvalidatingMutation({
     mutationFn: (id: number) => listService.activate(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.lists.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedule.public });
-    },
+    keysToInvalidate: listChangeInvalidationKeys,
   });
-};
 
-export const useUpdateListMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
+export const useUpdateListMutation = () =>
+  useInvalidatingMutation({
     mutationFn: ({ id, payload }: { id: number; payload: { name?: string; isActive?: boolean } }) =>
       listService.update(id, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.lists.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedule.public });
-    },
+    keysToInvalidate: listChangeInvalidationKeys,
   });
-};
 
-export const useDuplicateListMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
+export const useDuplicateListMutation = () =>
+  useInvalidatingMutation({
     mutationFn: ({ id, name }: { id: number; name?: string }) => listService.duplicate(id, { name }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.lists.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedule.public });
-    },
+    keysToInvalidate: listChangeInvalidationKeys,
   });
-};
 
-export const useDeleteListMutation = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
+export const useDeleteListMutation = () =>
+  useInvalidatingMutation({
     mutationFn: (id: number) => listService.remove(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.lists.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedule.public });
-    },
+    keysToInvalidate: listChangeInvalidationKeys,
   });
-};

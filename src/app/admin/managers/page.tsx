@@ -27,6 +27,9 @@ export default function ManagersPage() {
   const currentUser = currentUserData?.user;
   const isAdmin = currentUser?.roleName === ROLE_ADMIN;
   const saving = createManagerMutation.isPending;
+  const updateFormField = (field: keyof typeof form, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -83,29 +86,29 @@ export default function ManagersPage() {
             <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
               <FieldGroup>
                 <FieldLabel>Фамилия *</FieldLabel>
-                <Input value={form.surname} onChange={(e) => setForm((prev) => ({ ...prev, surname: e.target.value }))} required />
+                <Input value={form.surname} onChange={(e) => updateFormField("surname", e.target.value)} required />
               </FieldGroup>
               <FieldGroup>
                 <FieldLabel>Имя *</FieldLabel>
-                <Input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} required />
+                <Input value={form.name} onChange={(e) => updateFormField("name", e.target.value)} required />
               </FieldGroup>
               <FieldGroup>
                 <FieldLabel>Отчество</FieldLabel>
-                <Input value={form.patronymic} onChange={(e) => setForm((prev) => ({ ...prev, patronymic: e.target.value }))} />
+                <Input value={form.patronymic} onChange={(e) => updateFormField("patronymic", e.target.value)} />
               </FieldGroup>
             </div>
 
             <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               <FieldGroup>
                 <FieldLabel>Логин *</FieldLabel>
-                <Input value={form.login} onChange={(e) => setForm((prev) => ({ ...prev, login: e.target.value }))} required />
+                <Input value={form.login} onChange={(e) => updateFormField("login", e.target.value)} required />
               </FieldGroup>
               <FieldGroup>
                 <FieldLabel>Пароль *</FieldLabel>
                 <Input
                   type="password"
                   value={form.password}
-                  onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+                  onChange={(e) => updateFormField("password", e.target.value)}
                   required
                 />
                 <p className="text-xs text-text-tertiary">Минимум 8 символов, хотя бы одна буква и одна цифра.</p>

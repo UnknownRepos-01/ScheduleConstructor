@@ -19,6 +19,9 @@ const sizeClasses: Record<ButtonSize, string> = {
   icon: "h-9 w-9 rounded-sm p-0",
 };
 
+const baseButtonClasses =
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-transparent font-semibold leading-[1.4] transition duration-150";
+
 type CommonProps = {
   children: ReactNode;
   className?: string;
@@ -36,7 +39,8 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-transparent font-semibold leading-[1.4] transition duration-150 active:scale-[0.97]",
+        baseButtonClasses,
+        "active:scale-[0.97]",
         variantClasses[variant],
         sizeClasses[size],
         className,
@@ -58,7 +62,8 @@ export function ButtonLink({
   return (
     <a
       className={cn(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-transparent font-semibold leading-[1.4] no-underline transition duration-150",
+        baseButtonClasses,
+        "no-underline",
         variantClasses[variant],
         sizeClasses[size],
         className,

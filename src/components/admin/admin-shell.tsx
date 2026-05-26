@@ -24,6 +24,8 @@ const navItems: NavItem[] = [
   { href: "/admin/classes", label: "Классы", icon: "classes" },
   { href: "/admin/classrooms", label: "Кабинеты", icon: "classrooms" },
   { href: "/admin/subjects", label: "Предметы", icon: "subjects" },
+  { href: "/admin/curriculum-plans", label: "Учебный план", icon: "schedule" },
+  { href: "/admin/teaching-assignments", label: "Назначения", icon: "teachers" },
   { href: "/admin/constructor", label: "Конструктор", icon: "constructor" },
 ];
 
@@ -39,12 +41,13 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const logoutMutation = useLogoutMutation();
   const { data: currentUserData } = useCurrentUserQuery();
   const isAdmin = currentUserData?.user?.roleName === ROLE_ADMIN;
-  const dynamicNavItems: NavItem[] = isAdmin
+  const adminNavItems: NavItem[] = isAdmin
     ? [
         ...navItems,
         { href: "/admin/ip-auths", label: "Подтверждение IP", icon: "warning" },
       ]
     : navItems;
+  const closeSidebar = () => setSidebarOpen(false);
 
   const handleLogout = async () => {
     await logoutMutation.mutateAsync();
@@ -72,7 +75,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <div className="px-4 py-2 text-[11px] font-bold uppercase tracking-[0.08em] text-text-tertiary">
           Управление
         </div>
-        {dynamicNavItems.map((item) => (
+        {adminNavItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -80,7 +83,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               "flex items-center gap-3 border-r-[3px] border-transparent px-6 py-2.5 text-sm font-medium text-text-secondary transition duration-150 hover:bg-bg-hover hover:text-text-primary",
               pathname === item.href && "border-accent-primary bg-accent-primary-light text-accent-primary",
             )}
-            onClick={() => setSidebarOpen(false)}
+            onClick={closeSidebar}
           >
             <AppIcon name={item.icon} className="h-[18px] w-[18px]" />
             {item.label}
@@ -129,7 +132,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         {children}
       </main>
 
-      {sidebarOpen ? <div className="fixed inset-0 z-[99] bg-black/30 md:hidden" onClick={() => setSidebarOpen(false)} /> : null}
+      {sidebarOpen ? <div className="fixed inset-0 z-[99] bg-black/30 md:hidden" onClick={closeSidebar} /> : null}
     </div>
   );
 }

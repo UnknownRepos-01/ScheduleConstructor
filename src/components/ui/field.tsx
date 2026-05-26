@@ -2,6 +2,9 @@ import type { HTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, SelectHT
 
 import { cn } from "@/lib/cn";
 
+const fieldControlClasses =
+  "w-full rounded-md border border-border bg-bg-input px-3.5 py-2.5 text-sm text-text-primary outline-none transition duration-150 focus:border-accent-primary focus:ring-4 focus:ring-accent-primary-light/70";
+
 export function FieldGroup({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("flex flex-col gap-1.5", className)} {...props} />;
 }
@@ -22,7 +25,8 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return (
     <input
       className={cn(
-        "w-full rounded-md border border-border bg-bg-input px-3.5 py-2.5 text-sm text-text-primary outline-none transition duration-150 placeholder:text-text-tertiary focus:border-accent-primary focus:ring-4 focus:ring-accent-primary-light/70",
+        fieldControlClasses,
+        "placeholder:text-text-tertiary",
         className,
       )}
       {...props}
@@ -34,7 +38,8 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
   return (
     <select
       className={cn(
-        "w-full cursor-pointer rounded-md border border-border bg-bg-input px-3.5 py-2.5 pr-9 text-sm text-text-primary outline-none transition duration-150 focus:border-accent-primary focus:ring-4 focus:ring-accent-primary-light/70",
+        fieldControlClasses,
+        "cursor-pointer pr-9",
         className,
       )}
       {...props}

@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 
+import { TableRowActions } from "@/components/admin/table-row-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,6 +21,7 @@ import {
   useDeleteTeacherMutation,
   useClassroomsQuery,
   useManagersQuery,
+  useSubjectsQuery,
   useTeachersQuery,
   useUpdateTeacherMutation,
 } from "@/lib/react-query";
@@ -32,6 +34,8 @@ interface UserRecord {
   login: string;
   defaultClassroomId: number | null;
   defaultClassroomNumber?: string | null;
+  subjectIds: number[];
+  subjectNames: string[];
   role: "teacher" | "manager";
 }
 
@@ -45,6 +49,7 @@ export default function TeachersPage() {
     login: "",
     password: "",
     defaultClassroomId: "",
+    subjectIds: [] as number[],
     role: "teacher" as "teacher" | "manager",
   });
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +58,7 @@ export default function TeachersPage() {
   const isAdmin = currentUserData?.user?.roleName === ROLE_ADMIN;
   const { data, isLoading } = useTeachersQuery();
   const { data: classroomsData } = useClassroomsQuery();
+  const { data: subjectsData, isLoading: isSubjectsLoading } = useSubjectsQuery();
   const { data: managersData, isLoading: isManagersLoading } = useManagersQuery(isAdmin);
   const createTeacherMutation = useCreateTeacherMutation();
   const updateTeacherMutation = useUpdateTeacherMutation();
@@ -66,6 +72,8 @@ export default function TeachersPage() {
             ...item,
             defaultClassroomId: null,
             defaultClassroomNumber: null,
+            subjectIds: [],
+            subjectNames: [],
           }))
         : [],
     [managersData],
@@ -80,10 +88,28 @@ export default function TeachersPage() {
   const isSaving = createTeacherMutation.isPending || updateTeacherMutation.isPending;
 
   const resetForm = () => {
-    setForm({ name: "", surname: "", patronymic: "", login: "", password: "", defaultClassroomId: "", role: "teacher" });
+    setForm({
+      name: "",
+      surname: "",
+      patronymic: "",
+      login: "",
+      password: "",
+      defaultClassroomId: "",
+      subjectIds: [],
+      role: "teacher",
+    });
     setEditId(null);
     setShowForm(false);
     setError(null);
+  };
+
+  const toggleSubject = (subjectId: number) => {
+    setForm((previous) => ({
+      ...previous,
+      subjectIds: previous.subjectIds.includes(subjectId)
+        ? previous.subjectIds.filter((id) => id !== subjectId)
+        : [...previous.subjectIds, subjectId],
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -101,6 +127,7 @@ export default function TeachersPage() {
             login: form.login,
             roleName: form.role === "manager" ? "Менеджер" : "Преподаватель",
             defaultClassroomId: form.defaultClassroomId ? Number.parseInt(form.defaultClassroomId, 10) : null,
+            subjectIds: form.role === "teacher" ? form.subjectIds : [],
             ...(form.password ? { password: form.password } : {}),
           },
         });
@@ -117,6 +144,7 @@ export default function TeachersPage() {
           password: form.password,
           roleName: form.role === "manager" ? "Менеджер" : "Преподаватель",
           defaultClassroomId: form.defaultClassroomId ? Number.parseInt(form.defaultClassroomId, 10) : null,
+          subjectIds: form.role === "teacher" ? form.subjectIds : [],
         });
       }
 
@@ -139,6 +167,7 @@ export default function TeachersPage() {
       login: teacher.login,
       password: "",
       defaultClassroomId: teacher.defaultClassroomId ? String(teacher.defaultClassroomId) : "",
+      subjectIds: teacher.subjectIds ?? [],
       role: teacher.role,
     });
     setEditId(teacher.id);
@@ -213,7 +242,7 @@ export default function TeachersPage() {
               <Input value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} required />
             </FieldGroup>
             <FieldGroup>
-              <FieldLabel>Кабинет по умолчанию</FieldLabel>
+              <FieldLabel>Обычный кабинет</FieldLabel>
               <Select
                 value={form.defaultClassroomId}
                 onChange={(e) => setForm({ ...form, defaultClassroomId: e.target.value })}
@@ -237,6 +266,33 @@ export default function TeachersPage() {
               />
             </FieldGroup>
           </div>
+          {form.role === "teacher" ? (
+            <FieldGroup className="mb-4">
+              <FieldLabel>Предметы преподавателя</FieldLabel>
+              <div className="flex max-h-[140px] flex-wrap gap-1.5 overflow-auto rounded-md border border-border bg-bg-secondary p-2">
+                {(subjectsData ?? []).map((subject) => {
+                  const selected = form.subjectIds.includes(subject.id);
+                  return (
+                    <button
+                      key={subject.id}
+                      type="button"
+                      onClick={() => toggleSubject(subject.id)}
+                      className={
+                        selected
+                          ? "rounded-md border border-accent-primary bg-accent-primary-light px-2 py-1 text-xs font-semibold text-accent-primary"
+                          : "rounded-md border border-border-light px-2 py-1 text-xs text-text-secondary"
+                      }
+                    >
+                      {subject.name}
+                    </button>
+                  );
+                })}
+                {(subjectsData ?? []).length === 0 ? (
+                  <div className="px-1 py-0.5 text-xs text-text-tertiary">Предметы ещё не добавлены.</div>
+                ) : null}
+              </div>
+            </FieldGroup>
+          ) : null}
           <div className="flex gap-2">
             <Button type="submit" variant="primary" disabled={isSaving}>
               {isSaving ? "Сохранение..." : editId ? "Сохранить" : "Добавить"}
@@ -246,7 +302,7 @@ export default function TeachersPage() {
         </form>
       </Modal>
 
-      {isLoading || isManagersLoading ? (
+      {isLoading || isManagersLoading || isSubjectsLoading ? (
         <LoadingState />
       ) : users.length === 0 ? (
         <Card>
@@ -266,7 +322,8 @@ export default function TeachersPage() {
                 <THeadCell>Роль</THeadCell>
                 <THeadCell>ФИО</THeadCell>
                 <THeadCell>Логин</THeadCell>
-                <THeadCell>Кабинет по умолчанию</THeadCell>
+                <THeadCell>Обычный кабинет</THeadCell>
+                <THeadCell>Предметы</THeadCell>
                 <THeadCell className="w-[140px]">Действия</THeadCell>
               </tr>
             </thead>
@@ -283,10 +340,10 @@ export default function TeachersPage() {
                   <TBodyCell><Badge>{teacher.login}</Badge></TBodyCell>
                   <TBodyCell>{teacher.defaultClassroomNumber ?? "—"}</TBodyCell>
                   <TBodyCell>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" onClick={() => handleEdit(teacher)}><AppIcon name="edit" className="h-4 w-4" /></Button>
-                      <Button size="sm" variant="danger" onClick={() => handleDelete(teacher.id)}><AppIcon name="delete" className="h-4 w-4" /></Button>
-                    </div>
+                    {teacher.subjectNames.length > 0 ? teacher.subjectNames.join(", ") : "—"}
+                  </TBodyCell>
+                  <TBodyCell>
+                    <TableRowActions onEdit={() => handleEdit(teacher)} onDelete={() => handleDelete(teacher.id)} />
                   </TBodyCell>
                 </tr>
               ))}

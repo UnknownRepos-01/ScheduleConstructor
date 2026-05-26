@@ -1,9 +1,9 @@
 import axios, {
-  AxiosError,
-  AxiosInstance,
-  AxiosRequestConfig,
-  AxiosResponse,
-  InternalAxiosRequestConfig,
+  type AxiosError,
+  type AxiosInstance,
+  type AxiosRequestConfig,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
 } from "axios";
 
 export interface ApiErrorPayload {
@@ -97,41 +97,33 @@ const createHttpClient = (): AxiosInstance => {
 
 const httpClient = createHttpClient();
 
+const responseData = async <TResponse>(request: Promise<AxiosResponse<TResponse>>): Promise<TResponse> => {
+  const response = await request;
+  return response.data;
+};
+
 export const apiClient = {
-  get: async <TResponse>(url: string, config?: AxiosRequestConfig): Promise<TResponse> => {
-    const response = await httpClient.get<TResponse>(url, config);
-    return response.data;
-  },
+  get: <TResponse>(url: string, config?: AxiosRequestConfig): Promise<TResponse> =>
+    responseData(httpClient.get<TResponse>(url, config)),
 
-  post: async <TResponse, TBody = unknown>(
+  post: <TResponse, TBody = unknown>(
     url: string,
     body?: TBody,
     config?: AxiosRequestConfig,
-  ): Promise<TResponse> => {
-    const response = await httpClient.post<TResponse>(url, body, config);
-    return response.data;
-  },
+  ): Promise<TResponse> => responseData(httpClient.post<TResponse>(url, body, config)),
 
-  put: async <TResponse, TBody = unknown>(
+  put: <TResponse, TBody = unknown>(
     url: string,
     body?: TBody,
     config?: AxiosRequestConfig,
-  ): Promise<TResponse> => {
-    const response = await httpClient.put<TResponse>(url, body, config);
-    return response.data;
-  },
+  ): Promise<TResponse> => responseData(httpClient.put<TResponse>(url, body, config)),
 
-  delete: async <TResponse>(url: string, config?: AxiosRequestConfig): Promise<TResponse> => {
-    const response = await httpClient.delete<TResponse>(url, config);
-    return response.data;
-  },
+  delete: <TResponse>(url: string, config?: AxiosRequestConfig): Promise<TResponse> =>
+    responseData(httpClient.delete<TResponse>(url, config)),
 
-  patch: async <TResponse, TBody = unknown>(
+  patch: <TResponse, TBody = unknown>(
     url: string,
     body?: TBody,
     config?: AxiosRequestConfig,
-  ): Promise<TResponse> => {
-    const response = await httpClient.patch<TResponse>(url, body, config);
-    return response.data;
-  },
+  ): Promise<TResponse> => responseData(httpClient.patch<TResponse>(url, body, config)),
 };

@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 
+import { TableRowActions } from "@/components/admin/table-row-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -40,6 +41,11 @@ export default function ClassesPage() {
     setEditId(null);
     setShowForm(false);
     setError(null);
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setShowForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,10 +87,7 @@ export default function ClassesPage() {
         actions={
           <Button
             variant="primary"
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
+            onClick={openCreateForm}
           >
             <AppIcon name="add" className="h-4 w-4" />
             Добавить класс
@@ -145,10 +148,7 @@ export default function ClassesPage() {
             icon="classes"
             title="Классы пока не добавлены"
             actionLabel="Добавить класс"
-            onAction={() => {
-              resetForm();
-              setShowForm(true);
-            }}
+            onAction={openCreateForm}
           />
         </Card>
       ) : (
@@ -171,14 +171,7 @@ export default function ClassesPage() {
                   <TBodyCell>{item.gradeNumber} класс</TBodyCell>
                   <TBodyCell>{item.letter}</TBodyCell>
                   <TBodyCell>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" onClick={() => handleEdit(item)}>
-                        <AppIcon name="edit" className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="danger" onClick={() => handleDelete(item.id)}>
-                        <AppIcon name="delete" className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <TableRowActions onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item.id)} />
                   </TBodyCell>
                 </tr>
               ))}

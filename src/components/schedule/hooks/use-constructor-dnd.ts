@@ -21,6 +21,25 @@ type UseConstructorDndParams = {
   setSchedule: React.Dispatch<React.SetStateAction<ScheduleEntry[]>>;
 };
 
+const toSchedulePayload = (
+  entry: ScheduleEntry,
+  listId: number,
+  cell: { classId: number; day: number; lessonNumber: number },
+): SchedulePayload => {
+  const teacherIds = getEntryTeacherIds(entry);
+
+  return {
+    listId,
+    classId: cell.classId,
+    day: cell.day,
+    lessonNumber: cell.lessonNumber,
+    subjectId: entry.subjectId,
+    teacherId: teacherIds[0] ?? entry.teacherId,
+    teacherIds,
+    classroomIds: entry.classroomIds,
+  };
+};
+
 export function useConstructorDnd({
   selectedListId,
   scheduleById,
@@ -126,17 +145,39 @@ export function useConstructorDnd({
       );
 
       try {
-        const sourceTeacherIds = getEntryTeacherIds(sourceEntry);
-        const destinationPayload: SchedulePayload = {
-          listId: selectedListId,
-          classId: targetCell.classId,
-          day: targetCell.day,
-          lessonNumber: targetCell.lessonNumber,
-          subjectId: sourceEntry.subjectId,
-          teacherId: sourceTeacherIds[0] ?? sourceEntry.teacherId,
-          teacherIds: sourceTeacherIds,
-          classroomIds: sourceEntry.classroomIds,
-        };
+        const destinationPayload = toSchedulePayload(sourceEntry, selectedListId, targetCell);
+
+        if (existingTargetEntry) {
+          const sourceCell = {
+            classId: sourceEntry.classId,
+            day: sourceEntry.day,
+            lessonNumber: sourceEntry.lessonNumber,
+          };
+          const sourcePayload = toSchedulePayload(existingTargetEntry, selectedListId, sourceCell);
+          const [destinationResponse, sourceResponse] = await Promise.all([
+            upsertCell(destinationPayload),
+            upsertCell(sourcePayload),
+          ]);
+          const destinationScheduleId = Number(destinationResponse.scheduleId);
+          const sourceScheduleId = Number(sourceResponse.scheduleId);
+
+          setSchedule((previous) => {
+            const next = previous.filter(
+              (item) =>
+                item.id !== sourceEntry.id &&
+                item.id !== existingTargetEntry.id &&
+                item.id !== destinationScheduleId &&
+                item.id !== sourceScheduleId,
+            );
+
+            return [
+              ...next,
+              { ...destinationPayload, id: destinationScheduleId, teacherId: destinationPayload.teacherId ?? null },
+              { ...sourcePayload, id: sourceScheduleId, teacherId: sourcePayload.teacherId ?? null },
+            ];
+          });
+          return;
+        }
 
         const response = await upsertCell(destinationPayload);
         const destinationScheduleId = Number(response.scheduleId);
@@ -148,7 +189,6 @@ export function useConstructorDnd({
         setSchedule((previous) => {
           const next = previous.filter((item) => {
             if (!shouldDuplicate && item.id === sourceEntry.id) return false;
-            if (existingTargetEntry && item.id === existingTargetEntry.id) return false;
             if (item.id === destinationScheduleId) return false;
             return !(
               item.classId === targetCell.classId &&

@@ -3,20 +3,22 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/db/index";
 import { lessonClassrooms, lessonTeachers, lists, scheduleChanges, schedules } from "@/db/schema";
-import { AdminCheck, getSession } from "@/lib/auth";
+import {
+  apiErrorResponse,
+  invalidIdResponse,
+  parseRouteId,
+  requireAdmin,
+} from "@/lib/api/route-helpers";
 
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
 const NOT_FOUND_MESSAGE = "Лист не найден";
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const id = Number.parseInt(params.id, 10);
-    if (Number.isNaN(id)) return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
+    const id = parseRouteId(params.id);
+    if (!id) return invalidIdResponse();
 
     const body = await request.json();
     const updateData: any = {};
@@ -27,38 +29,36 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     if (result.affectedRows === 0) return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 });
 
     return NextResponse.json({ message: "Лист успешно обновлён" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const id = Number.parseInt(params.id, 10);
-    if (Number.isNaN(id)) return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
+    const id = parseRouteId(params.id);
+    if (!id) return invalidIdResponse();
 
     await db.update(lists).set({ isActive: false });
     const [result] = await db.update(lists).set({ isActive: true }).where(eq(lists.id, id));
     if (result.affectedRows === 0) return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 });
 
     return NextResponse.json({ message: "Лист успешно активирован" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const sourceId = Number.parseInt(params.id, 10);
-    if (Number.isNaN(sourceId)) return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
+    const sourceId = parseRouteId(params.id);
+    if (!sourceId) return invalidIdResponse();
 
     const [sourceList] = await db.select().from(lists).where(eq(lists.id, sourceId));
     if (!sourceList) return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 });
@@ -112,19 +112,18 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     return NextResponse.json({ message: "Лист успешно продублирован", insertId: newListId }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const id = Number.parseInt(params.id, 10);
-    if (Number.isNaN(id)) return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
+    const id = parseRouteId(params.id);
+    if (!id) return invalidIdResponse();
 
     const listSchedules = await db.select({ id: schedules.id }).from(schedules).where(eq(schedules.listId, id));
     const scheduleIds = listSchedules.map((item) => item.id);
@@ -140,7 +139,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     if (result.affectedRows === 0) return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 });
 
     return NextResponse.json({ message: "Лист успешно удалён" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

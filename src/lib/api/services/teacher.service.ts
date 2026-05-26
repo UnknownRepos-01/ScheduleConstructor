@@ -9,6 +9,8 @@ export interface Teacher {
   login: string;
   defaultClassroomId: number | null;
   defaultClassroomNumber?: string | null;
+  subjectIds: number[];
+  subjectNames: string[];
 }
 
 export interface CreateTeacherPayload {
@@ -19,6 +21,7 @@ export interface CreateTeacherPayload {
   password: string;
   roleName?: typeof ROLE_TEACHER | typeof ROLE_MANAGER;
   defaultClassroomId?: number | null;
+  subjectIds?: number[];
 }
 
 export interface UpdateTeacherPayload {
@@ -29,6 +32,7 @@ export interface UpdateTeacherPayload {
   password?: string;
   roleName?: typeof ROLE_TEACHER | typeof ROLE_MANAGER;
   defaultClassroomId?: number | null;
+  subjectIds?: number[];
 }
 
 export const teacherService = createCrudService<Teacher, CreateTeacherPayload, UpdateTeacherPayload>("/teachers");

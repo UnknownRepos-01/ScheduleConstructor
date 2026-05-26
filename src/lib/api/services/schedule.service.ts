@@ -94,6 +94,18 @@ export interface ScheduleAutocompleteResponse {
   teachersByClass: CountedTeacherSuggestion[];
 }
 
+export interface GenerateSchedulePayload {
+  listId: number;
+  replaceExisting?: boolean;
+  mode?: "replace" | "append";
+  append?: boolean;
+}
+
+export interface GenerateScheduleResponse extends MutationResponse {
+  entries: ConstructorScheduleEntry[];
+  warnings?: string[];
+}
+
 export const scheduleService = {
   getPublicSchedule: (): Promise<PublicScheduleResponse> => apiClient.get<PublicScheduleResponse>("/schedule"),
 
@@ -121,4 +133,7 @@ export const scheduleService = {
 
     return apiClient.delete<MutationResponse>(`/schedules?${params.toString()}`);
   },
+
+  generate: (payload: GenerateSchedulePayload): Promise<GenerateScheduleResponse> =>
+    apiClient.post<GenerateScheduleResponse, GenerateSchedulePayload>("/schedules/generate", payload),
 };

@@ -45,6 +45,19 @@ interface TeacherInfo {
   shortName: string;
 }
 
+const getTeacherFullNames = (item: ScheduleItem) =>
+  item.teacherFullNames?.length ? item.teacherFullNames : item.teacherFullName ? [item.teacherFullName] : [];
+
+const getTeacherShortNames = (item: ScheduleItem) =>
+  item.teacherNames?.length ? item.teacherNames : item.teacherName ? [item.teacherName] : [];
+
+const groupLessonsByNumber = (lessons: ScheduleItem[]) =>
+  lessons.reduce<Record<number, ScheduleItem[]>>((grouped, lesson) => {
+    if (!grouped[lesson.lessonNumber]) grouped[lesson.lessonNumber] = [];
+    grouped[lesson.lessonNumber].push(lesson);
+    return grouped;
+  }, {});
+
 export default function TeacherSchedulePage() {
   const [selectedTeacher, setSelectedTeacher] = useState<string>("all");
   const router = useRouter();
@@ -62,8 +75,8 @@ export default function TeacherSchedulePage() {
     const seen = new Set<string>();
 
     schedule.forEach((item) => {
-      const fullNames = item.teacherFullNames?.length ? item.teacherFullNames : item.teacherFullName ? [item.teacherFullName] : [];
-      const shortNames = item.teacherNames?.length ? item.teacherNames : item.teacherName ? [item.teacherName] : [];
+      const fullNames = getTeacherFullNames(item);
+      const shortNames = getTeacherShortNames(item);
       fullNames.forEach((fullName, index) => {
         if (!fullName || seen.has(fullName)) return;
         seen.add(fullName);
@@ -165,8 +178,7 @@ export default function TeacherSchedulePage() {
       ) : (
         filteredTeachers.map((teacher) => {
           const teacherSchedule = schedule.filter((item) => {
-            const fullNames = item.teacherFullNames?.length ? item.teacherFullNames : item.teacherFullName ? [item.teacherFullName] : [];
-            return fullNames.includes(teacher.id);
+            return getTeacherFullNames(item).includes(teacher.id);
           });
 
           return (
@@ -192,12 +204,7 @@ export default function TeacherSchedulePage() {
                       const dayLessons = teacherSchedule.filter((item) => item.day === day.id).sort((a, b) => a.lessonNumber - b.lessonNumber);
                       if (dayLessons.length === 0) return null;
 
-                      const groupedByLesson: Record<number, ScheduleItem[]> = {};
-                      dayLessons.forEach((lesson) => {
-                        if (!groupedByLesson[lesson.lessonNumber]) groupedByLesson[lesson.lessonNumber] = [];
-                        groupedByLesson[lesson.lessonNumber].push(lesson);
-                      });
-
+                      const groupedByLesson = groupLessonsByNumber(dayLessons);
                       const sortedLessonNumbers = Object.keys(groupedByLesson).map(Number).sort((a, b) => a - b);
 
                       let dayRowIdx = 0;

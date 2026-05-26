@@ -55,6 +55,8 @@ export default function ConstructorPage() {
         onRenameList={model.listActions.openRenameListModal}
         onDuplicateList={model.listActions.openDuplicateListModal}
         onDeleteList={model.listActions.handleDeleteList}
+        onGenerateNewSchedule={model.listActions.handleGenerateNewSchedule}
+        onAppendSchedule={model.listActions.handleAppendSchedule}
       />
 
       <ConstructorListModal
@@ -123,4 +125,3 @@ export default function ConstructorPage() {
     </div>
   );
 }
-

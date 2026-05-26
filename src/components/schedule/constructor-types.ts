@@ -6,6 +6,8 @@ export type Teacher = {
   surname: string;
   patronymic: string | null;
   defaultClassroomId?: number | null;
+  subjectIds?: number[];
+  subjectNames?: string[];
 };
 export type Subject = { id: number; name: string };
 export type Classroom = { id: number; number: string };

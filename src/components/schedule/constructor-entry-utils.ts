@@ -46,12 +46,15 @@ export function buildClassroomNumberById(classrooms: Classroom[]): Map<number, s
 export const createResourceLoadKey = (resourceId: number, day: number, lessonNumber: number): string =>
   `${resourceId}:${day}:${lessonNumber}`;
 
-export function buildTeacherOccupancy(schedule: ScheduleEntry[]): Map<string, number> {
+function buildResourceOccupancy(
+  schedule: ScheduleEntry[],
+  getResourceIds: (entry: ScheduleEntry) => number[],
+): Map<string, number> {
   const occupancy = new Map<string, number>();
 
   schedule.forEach((entry) => {
-    getEntryTeacherIds(entry).forEach((teacherId) => {
-      const key = createResourceLoadKey(teacherId, entry.day, entry.lessonNumber);
+    getResourceIds(entry).forEach((resourceId) => {
+      const key = createResourceLoadKey(resourceId, entry.day, entry.lessonNumber);
       occupancy.set(key, (occupancy.get(key) || 0) + 1);
     });
   });
@@ -59,15 +62,22 @@ export function buildTeacherOccupancy(schedule: ScheduleEntry[]): Map<string, nu
   return occupancy;
 }
 
+export function buildTeacherOccupancy(schedule: ScheduleEntry[]): Map<string, number> {
+  return buildResourceOccupancy(schedule, getEntryTeacherIds);
+}
+
 export function buildClassroomOccupancy(schedule: ScheduleEntry[]): Map<string, number> {
-  const occupancy = new Map<string, number>();
+  return buildResourceOccupancy(schedule, (entry) => entry.classroomIds);
+}
 
-  schedule.forEach((entry) => {
-    entry.classroomIds.forEach((classroomId) => {
-      const key = createResourceLoadKey(classroomId, entry.day, entry.lessonNumber);
-      occupancy.set(key, (occupancy.get(key) || 0) + 1);
-    });
-  });
+export function getResourceBusyCount(
+  occupancy: Map<string, number>,
+  resourceId: number,
+  cell: { day: number; lessonNumber: number },
+  excludeCurrent?: boolean,
+): number {
+  const key = createResourceLoadKey(resourceId, cell.day, cell.lessonNumber);
+  const total = occupancy.get(key) || 0;
 
-  return occupancy;
+  return excludeCurrent ? Math.max(0, total - 1) : total;
 }

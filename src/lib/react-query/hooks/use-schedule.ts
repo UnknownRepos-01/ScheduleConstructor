@@ -7,6 +7,7 @@ import {
   scheduleService,
   UpsertScheduleCellPayload,
   DeleteScheduleCellPayload,
+  GenerateSchedulePayload,
 } from "@/lib/api/services/schedule.service";
 import { queryKeys } from "@/lib/react-query/query-keys";
 
@@ -48,11 +49,14 @@ export const useScheduleAutocompleteQuery = (
     refetchOnWindowFocus: false,
   });
 
-export const useUpsertScheduleCellMutation = (listId: number | null) => {
+const useScheduleCellMutation = <TPayload, TResult>(
+  listId: number | null,
+  mutationFn: (payload: TPayload) => Promise<TResult>,
+) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: UpsertScheduleCellPayload) => scheduleService.upsertCell(payload),
+    mutationFn,
     onSuccess: () => {
       if (listId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.schedule.byList(listId) });
@@ -62,16 +66,11 @@ export const useUpsertScheduleCellMutation = (listId: number | null) => {
   });
 };
 
-export const useDeleteScheduleCellMutation = (listId: number | null) => {
-  const queryClient = useQueryClient();
+export const useUpsertScheduleCellMutation = (listId: number | null) =>
+  useScheduleCellMutation(listId, (payload: UpsertScheduleCellPayload) => scheduleService.upsertCell(payload));
 
-  return useMutation({
-    mutationFn: (payload: DeleteScheduleCellPayload) => scheduleService.deleteCell(payload),
-    onSuccess: () => {
-      if (listId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.schedule.byList(listId) });
-      }
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedule.public });
-    },
-  });
-};
+export const useDeleteScheduleCellMutation = (listId: number | null) =>
+  useScheduleCellMutation(listId, (payload: DeleteScheduleCellPayload) => scheduleService.deleteCell(payload));
+
+export const useGenerateScheduleMutation = (listId: number | null) =>
+  useScheduleCellMutation(listId, (payload: GenerateSchedulePayload) => scheduleService.generate(payload));

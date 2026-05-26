@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,52 @@ import { AppIcon } from "@/components/ui/icons";
 import { ApiError } from "@/lib/api";
 import { useChangePasswordMutation, useCurrentUserQuery } from "@/lib/react-query";
 
+type ChangePasswordFormState = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
+type PasswordField = {
+  id: string;
+  name: keyof ChangePasswordFormState;
+  label: string;
+  helper?: string;
+};
+
+const EMPTY_FORM: ChangePasswordFormState = {
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: "",
+};
+
+const PASSWORD_FIELDS: PasswordField[] = [
+  { id: "current-password", name: "currentPassword", label: "Текущий пароль" },
+  {
+    id: "new-password",
+    name: "newPassword",
+    label: "Новый пароль",
+    helper: "Минимум 8 символов, хотя бы одна буква и одна цифра.",
+  },
+  { id: "confirm-password", name: "confirmPassword", label: "Подтверждение нового пароля" },
+];
+
+const getErrorMessage = (err: unknown) =>
+  err instanceof ApiError ? err.message : "Не удалось изменить пароль";
+
 export function ChangePasswordForm() {
   const router = useRouter();
   const { data: currentUserData } = useCurrentUserQuery();
   const changePasswordMutation = useChangePasswordMutation();
-  const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [form, setForm] = useState<ChangePasswordFormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const currentUser = currentUserData?.user;
   const saving = changePasswordMutation.isPending;
+  const updateFormField = (field: keyof ChangePasswordFormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -44,13 +80,9 @@ export function ChangePasswordForm() {
     try {
       const response = await changePasswordMutation.mutateAsync(form);
       setSuccess(response.message || "Пароль успешно изменён");
-      setForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setForm(EMPTY_FORM);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-        return;
-      }
-      setError("Не удалось изменить пароль");
+      setError(getErrorMessage(err));
     }
   };
 
@@ -79,39 +111,19 @@ export function ChangePasswordForm() {
           ) : null}
 
           <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-            <FieldGroup>
-              <FieldLabel htmlFor="current-password">Текущий пароль</FieldLabel>
-              <Input
-                id="current-password"
-                type="password"
-                value={form.currentPassword}
-                onChange={(e) => setForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
-                required
-              />
-            </FieldGroup>
-
-            <FieldGroup>
-              <FieldLabel htmlFor="new-password">Новый пароль</FieldLabel>
-              <Input
-                id="new-password"
-                type="password"
-                value={form.newPassword}
-                onChange={(e) => setForm((prev) => ({ ...prev, newPassword: e.target.value }))}
-                required
-              />
-              <p className="text-xs text-text-tertiary">Минимум 8 символов, хотя бы одна буква и одна цифра.</p>
-            </FieldGroup>
-
-            <FieldGroup>
-              <FieldLabel htmlFor="confirm-password">Подтверждение нового пароля</FieldLabel>
-              <Input
-                id="confirm-password"
-                type="password"
-                value={form.confirmPassword}
-                onChange={(e) => setForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                required
-              />
-            </FieldGroup>
+            {PASSWORD_FIELDS.map((field) => (
+              <FieldGroup key={field.name}>
+                <FieldLabel htmlFor={field.id}>{field.label}</FieldLabel>
+                <Input
+                  id={field.id}
+                  type="password"
+                  value={form[field.name]}
+                  onChange={(event) => updateFormField(field.name, event.target.value)}
+                  required
+                />
+                {field.helper ? <p className="text-xs text-text-tertiary">{field.helper}</p> : null}
+              </FieldGroup>
+            ))}
 
             <div className="mt-2 flex flex-wrap gap-2">
               <Button type="submit" variant="primary" disabled={saving}>

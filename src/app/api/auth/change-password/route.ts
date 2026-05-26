@@ -4,6 +4,15 @@ import { and, eq, ne } from "drizzle-orm";
 import { changePasswordForUser, getClientIp, getIpAuthStatusIds, getSession, validateNewPassword } from "@/lib/auth";
 import { db } from "@/db/index";
 import { ipAuths } from "@/db/schema";
+import { apiErrorResponse } from "@/lib/api/route-helpers";
+
+const UNKNOWN_ERROR_MESSAGE = "Неизвестная ошибка";
+
+const parsePasswordChangeBody = (body: any) => ({
+  currentPassword: typeof body.currentPassword === "string" ? body.currentPassword : "",
+  newPassword: typeof body.newPassword === "string" ? body.newPassword : "",
+  confirmPassword: typeof body.confirmPassword === "string" ? body.confirmPassword : "",
+});
 
 export async function POST(request: Request) {
   try {
@@ -13,9 +22,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
-    const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
-    const confirmPassword = typeof body.confirmPassword === "string" ? body.confirmPassword : "";
+    const { currentPassword, newPassword, confirmPassword } = parsePasswordChangeBody(body);
 
     if (!currentPassword || !newPassword || !confirmPassword) {
       return NextResponse.json({ error: "Заполните все поля" }, { status: 400 });
@@ -49,7 +56,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: "Пароль успешно изменён" });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Неизвестная ошибка";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiErrorResponse(err, UNKNOWN_ERROR_MESSAGE);
   }
 }

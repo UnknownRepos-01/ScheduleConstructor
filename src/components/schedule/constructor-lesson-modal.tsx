@@ -59,6 +59,19 @@ type ConstructorLessonModalProps = {
   onApplyClassroomSuggestion: (classroomId: number) => void;
 };
 
+const getOptionButtonClassName = (selected: boolean, isBusy: boolean) => {
+  if (selected) {
+    return "rounded-md border border-accent-primary bg-accent-primary-light px-2 py-1 text-xs font-semibold text-accent-primary";
+  }
+
+  return isBusy
+    ? "rounded-md border border-danger-border bg-danger-light px-2 py-1 text-xs text-danger"
+    : "rounded-md border border-border-light px-2 py-1 text-xs text-text-secondary";
+};
+
+const suggestionButtonClassName =
+  "rounded-md border border-border-light px-2 py-1 text-xs text-text-secondary hover:border-accent-primary hover:text-accent-primary";
+
 export function ConstructorLessonModal({
   isOpen,
   title,
@@ -155,13 +168,7 @@ export function ConstructorLessonModal({
                   key={teacher.id}
                   type="button"
                   onClick={() => onToggleTeacher(teacher.id)}
-                  className={
-                    selected
-                      ? "rounded-md border border-accent-primary bg-accent-primary-light px-2 py-1 text-xs font-semibold text-accent-primary"
-                      : teacher.isBusy
-                        ? "rounded-md border border-danger-border bg-danger-light px-2 py-1 text-xs text-danger"
-                        : "rounded-md border border-border-light px-2 py-1 text-xs text-text-secondary"
-                  }
+                  className={getOptionButtonClassName(selected, teacher.isBusy)}
                   title={teacher.isBusy ? "У преподавателя уже есть занятие в это время" : undefined}
                 >
                   {teacher.label}
@@ -196,7 +203,7 @@ export function ConstructorLessonModal({
                         key={suggestion.teacherId}
                         type="button"
                         onClick={() => onApplyTeacherSuggestion(suggestion.teacherId)}
-                        className="rounded-md border border-border-light px-2 py-1 text-xs text-text-secondary hover:border-accent-primary hover:text-accent-primary"
+                        className={suggestionButtonClassName}
                       >
                         {suggestion.label}
                       </button>
@@ -214,7 +221,7 @@ export function ConstructorLessonModal({
                         key={suggestion.subjectId}
                         type="button"
                         onClick={() => onSubjectChange(String(suggestion.subjectId))}
-                        className="rounded-md border border-border-light px-2 py-1 text-xs text-text-secondary hover:border-accent-primary hover:text-accent-primary"
+                        className={suggestionButtonClassName}
                       >
                         {suggestion.name}
                       </button>
@@ -232,7 +239,7 @@ export function ConstructorLessonModal({
                         key={suggestion.classroomId}
                         type="button"
                         onClick={() => onApplyClassroomSuggestion(suggestion.classroomId)}
-                        className="rounded-md border border-border-light px-2 py-1 text-xs text-text-secondary hover:border-accent-primary hover:text-accent-primary"
+                        className={suggestionButtonClassName}
                       >
                         {suggestion.number}
                       </button>
@@ -272,13 +279,7 @@ export function ConstructorLessonModal({
                   key={classroom.id}
                   type="button"
                   onClick={() => onToggleClassroom(classroom.id)}
-                  className={
-                    selected
-                      ? "rounded-md border border-accent-primary bg-accent-primary-light px-2 py-1 text-xs font-semibold text-accent-primary"
-                      : classroom.isBusy
-                        ? "rounded-md border border-danger-border bg-danger-light px-2 py-1 text-xs text-danger"
-                        : "rounded-md border border-border-light px-2 py-1 text-xs text-text-secondary"
-                  }
+                  className={getOptionButtonClassName(selected, classroom.isBusy)}
                   title={classroom.isBusy ? "Кабинет уже занят в это время" : undefined}
                 >
                   {classroom.number}

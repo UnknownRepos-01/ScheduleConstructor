@@ -1,50 +1,75 @@
-﻿import { NextResponse } from "next/server";
-import { db } from "../../../../db/index";
-import { grades } from "../../../../db/schema";
-import { eq } from "drizzle-orm";
-import { AdminCheck, getSession } from "@/lib/auth";
+import { and, eq, ne } from "drizzle-orm";
+import { NextResponse } from "next/server";
 
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
+import { db } from "../../../../db/index";
+import { classes, curriculumPlans, grades } from "../../../../db/schema";
+import { apiErrorResponse, invalidIdResponse, parseRouteId, requireAdmin } from "@/lib/api/route-helpers";
+
 const NOT_FOUND_MESSAGE = "Параллель не найдена";
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const id = parseInt(params.id, 10);
-    if (isNaN(id)) return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
+    const id = parseRouteId(params.id);
+    if (!id) return invalidIdResponse();
 
     const body = await request.json();
-    const updateData: any = {};
-    if (body.number !== undefined) updateData.number = body.number;
-    if (body.hours !== undefined) updateData.hours = body.hours;
+    const updateData: Partial<typeof grades.$inferInsert> = {};
+    const number = body.number !== undefined ? Number.parseInt(String(body.number), 10) : undefined;
+    const hours = body.hours !== undefined ? Number.parseInt(String(body.hours), 10) : undefined;
+    if (number) updateData.number = number;
+    if (hours) updateData.hours = hours;
+
+    if (updateData.number !== undefined) {
+      const [duplicate] = await db
+        .select({ id: grades.id })
+        .from(grades)
+        .where(and(eq(grades.number, updateData.number), ne(grades.id, id)));
+      if (duplicate) {
+        return NextResponse.json({ error: "Параллель с таким номером уже существует" }, { status: 409 });
+      }
+    }
 
     const [result] = await db.update(grades).set(updateData).where(eq(grades.id, id));
     if (result.affectedRows === 0) return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 });
 
     return NextResponse.json({ message: "Параллель успешно обновлена" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const id = parseInt(params.id, 10);
-    if (isNaN(id)) return NextResponse.json({ error: "Некорректный ID" }, { status: 400 });
+    const id = parseRouteId(params.id);
+    if (!id) return invalidIdResponse();
+
+    const [currentGrade] = await db.select({ id: grades.id }).from(grades).where(eq(grades.id, id));
+    if (!currentGrade) return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 });
+
+    const [classEntry] = await db.select({ id: classes.id }).from(classes).where(eq(classes.gradeId, id));
+    if (classEntry) {
+      return NextResponse.json({ error: "Нельзя удалить параллель: для неё есть классы" }, { status: 409 });
+    }
+
+    const [planEntry] = await db
+      .select({ id: curriculumPlans.id })
+      .from(curriculumPlans)
+      .where(eq(curriculumPlans.gradeId, id));
+    if (planEntry) {
+      return NextResponse.json({ error: "Нельзя удалить параллель: для неё заполнен учебный план" }, { status: 409 });
+    }
 
     const [result] = await db.delete(grades).where(eq(grades.id, id));
     if (result.affectedRows === 0) return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 });
 
     return NextResponse.json({ message: "Параллель успешно удалена" });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

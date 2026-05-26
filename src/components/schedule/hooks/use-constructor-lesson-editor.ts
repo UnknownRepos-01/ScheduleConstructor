@@ -56,6 +56,10 @@ const EMPTY_FORM: AddLessonForm = {
   classroomIds: [],
 };
 
+const SAVE_LESSON_ERROR = "Не удалось сохранить запись";
+const NEW_LESSON_LABEL = "Новый урок";
+const EDIT_LESSON_LABEL = "Редактирование";
+
 function toggleNumber(values: number[], value: number): number[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
@@ -161,7 +165,7 @@ export function useConstructorLessonEditor({
         updateScheduleEntryInState({ ...payload, id: Number(response.scheduleId), teacherId: payload.teacherId ?? null });
         resetAddLessonModal();
       } catch (error: any) {
-        setAddLessonError(error.message || "Не удалось сохранить запись");
+        setAddLessonError(error.message || SAVE_LESSON_ERROR);
       } finally {
         setIsSubmittingLesson(false);
       }
@@ -299,13 +303,12 @@ export function useConstructorLessonEditor({
     classroomSuggestions,
     editingEntryId,
     teacherById,
-    teachers,
   ]);
 
   const lessonModalTitle = useMemo(() => {
-    if (!activeCell) return "Новый урок";
+    if (!activeCell) return NEW_LESSON_LABEL;
     const className = classById.get(activeCell.classId)?.displayName || "";
-    return `${editingEntryId ? "Редактирование" : "Новый урок"}: ${className}, ${activeCell.lessonNumber} урок`;
+    return `${editingEntryId ? EDIT_LESSON_LABEL : NEW_LESSON_LABEL}: ${className}, ${activeCell.lessonNumber} урок`;
   }, [activeCell, classById, editingEntryId]);
 
   const subjectOptions = useMemo(

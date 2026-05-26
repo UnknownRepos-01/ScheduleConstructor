@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 
 import { ButtonLink } from "@/components/ui/button";
 import { AppIcon } from "@/components/ui/icons";
@@ -37,6 +37,8 @@ interface ClassInfo {
   displayName: string;
 }
 
+const createScheduleCellKey = (classId: number, day: number, lesson: number) => `${classId}:${day}:${lesson}`;
+
 export default function PublicSchedulePage() {
   const { theme, toggleTheme } = useTheme();
   const { data, isLoading, isError } = usePublicScheduleQuery();
@@ -46,8 +48,19 @@ export default function PublicSchedulePage() {
   const listName = data?.listName ?? "";
   const emptyScheduleMessage = data?.data === null ? "Активное расписание пока не опубликовано" : null;
 
+  const scheduleByCell = useMemo(() => {
+    const map = new Map<string, ScheduleItem>();
+    schedule.forEach((item) => {
+      const key = createScheduleCellKey(item.classId, item.day, item.lessonNumber);
+      if (!map.has(key)) {
+        map.set(key, item);
+      }
+    });
+    return map;
+  }, [schedule]);
+
   const getCell = (classId: number, day: number, lesson: number): ScheduleItem | undefined => {
-    return schedule.find((s) => s.classId === classId && s.day === day && s.lessonNumber === lesson);
+    return scheduleByCell.get(createScheduleCellKey(classId, day, lesson));
   };
 
   if (isLoading) {
@@ -102,13 +115,6 @@ export default function PublicSchedulePage() {
             {DAYS.map((day) => (
               <React.Fragment key={day.id}>
                 {LESSONS.map((lesson, li) => {
-                  const hasAnyData = classList.some((cls) => {
-                    const cell = getCell(cls.id, day.id, lesson);
-                    return cell && cell.subjectName;
-                  });
-
-                  if (!hasAnyData && lesson > 8) return null;
-
                   return (
                     <tr key={`${day.id}-${lesson}`}>
                       {li === 0 ? (

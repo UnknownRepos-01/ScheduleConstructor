@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 
+import { TableRowActions } from "@/components/admin/table-row-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -37,6 +38,11 @@ export default function ClassroomsPage() {
     setEditId(null);
     setShowForm(false);
     setError(null);
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setShowForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,7 +82,7 @@ export default function ClassroomsPage() {
         title="Кабинеты"
         subtitle="Управление кабинетами, доступными для составления расписания"
         actions={
-          <Button variant="primary" onClick={() => { resetForm(); setShowForm(true); }}>
+          <Button variant="primary" onClick={openCreateForm}>
             <AppIcon name="add" className="h-4 w-4" />
             Добавить кабинет
           </Button>
@@ -107,7 +113,7 @@ export default function ClassroomsPage() {
             icon="classrooms"
             title="Кабинеты пока не добавлены"
             actionLabel="Добавить кабинет"
-            onAction={() => { resetForm(); setShowForm(true); }}
+            onAction={openCreateForm}
           />
         </Card>
       ) : (
@@ -126,10 +132,7 @@ export default function ClassroomsPage() {
                   <TBodyCell>{item.id}</TBodyCell>
                   <TBodyCell className="font-semibold">{item.number}</TBodyCell>
                   <TBodyCell>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" onClick={() => handleEdit(item)}><AppIcon name="edit" className="h-4 w-4" /></Button>
-                      <Button size="sm" variant="danger" onClick={() => handleDelete(item.id)}><AppIcon name="delete" className="h-4 w-4" /></Button>
-                    </div>
+                    <TableRowActions onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item.id)} />
                   </TBodyCell>
                 </tr>
               ))}

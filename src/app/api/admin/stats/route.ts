@@ -1,9 +1,10 @@
-﻿import { eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { db } from "../../../../db/index";
-import { AdminCheck, getSession } from "@/lib/auth";
 import { classes, classrooms, grades, lists, roles, subjects, users } from "../../../../db/schema";
+import { ROLE_TEACHER } from "@/lib/access";
+import { apiErrorResponse, requireAdmin } from "@/lib/api/route-helpers";
 
 type CountRow = { count: number | string };
 
@@ -20,13 +21,10 @@ async function countAllFrom(table: typeof classes | typeof classrooms | typeof g
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Требуется авторизация" }, { status: 401 });
-    if (!(await AdminCheck(session))) {
-      return NextResponse.json({ error: "У вас нет прав для выполнения этого действия" }, { status: 403 });
-    }
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
-    const [teacherRole] = await db.select().from(roles).where(eq(roles.name, "Преподаватель"));
+    const [teacherRole] = await db.select().from(roles).where(eq(roles.name, ROLE_TEACHER));
     let teachers = 0;
 
     if (teacherRole) {
@@ -53,7 +51,7 @@ export async function GET() {
       grades: gradesCount,
       lists: listsCount,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

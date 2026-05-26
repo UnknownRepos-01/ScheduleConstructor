@@ -12,15 +12,21 @@ export const statuses = mysqlTable("statuses", {
 
 export const grades = mysqlTable("grades", {
   id: int("id").autoincrement().primaryKey(),
-  number: int("number").notNull(),
+  number: int("number").notNull().unique(),
   hours: int("hours").notNull(),
 });
 
-export const classes = mysqlTable("classes", {
-  id: int("id").autoincrement().primaryKey(),
-  gradeId: int("grade_id").references(() => grades.id).notNull(),
-  letter: varchar("letter", { length: 10 }).notNull(),
-});
+export const classes = mysqlTable(
+  "classes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    gradeId: int("grade_id").references(() => grades.id).notNull(),
+    letter: varchar("letter", { length: 10 }).notNull(),
+  },
+  (table) => ({
+    classUnique: uniqueIndex("classes_grade_letter_unique").on(table.gradeId, table.letter),
+  }),
+);
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -53,12 +59,12 @@ export const ipAuths = mysqlTable(
 
 export const subjects = mysqlTable("subjects", {
   id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
 });
 
 export const classrooms = mysqlTable("classrooms", {
   id: int("id").autoincrement().primaryKey(),
-  number: varchar("number", { length: 50 }).notNull(),
+  number: varchar("number", { length: 50 }).notNull().unique(),
 });
 
 export const lists = mysqlTable("lists", {
@@ -104,6 +110,51 @@ export const teacherDefaultClassrooms = mysqlTable(
   },
   (table) => ({
     teacherUnique: uniqueIndex("teacher_default_classrooms_teacher_unique").on(table.teacherId),
+  }),
+);
+
+export const teacherSubjects = mysqlTable(
+  "teacher_subjects",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    teacherId: int("teacher_id").references(() => users.id).notNull(),
+    subjectId: int("subject_id").references(() => subjects.id).notNull(),
+  },
+  (table) => ({
+    teacherSubjectUnique: uniqueIndex("teacher_subjects_teacher_subject_unique").on(table.teacherId, table.subjectId),
+  }),
+);
+
+export const curriculumPlans = mysqlTable(
+  "curriculum_plans",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    gradeId: int("grade_id").references(() => grades.id).notNull(),
+    subjectId: int("subject_id").references(() => subjects.id).notNull(),
+    hoursPerWeek: int("hours_per_week").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    curriculumPlanUnique: uniqueIndex("curriculum_plans_grade_subject_unique").on(table.gradeId, table.subjectId),
+  }),
+);
+
+export const classSubjectTeachers = mysqlTable(
+  "class_subject_teachers",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    classId: int("class_id").references(() => classes.id).notNull(),
+    subjectId: int("subject_id").references(() => subjects.id).notNull(),
+    teacherId: int("teacher_id").references(() => users.id).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    classSubjectTeacherUnique: uniqueIndex("class_subject_teachers_class_subject_unique").on(
+      table.classId,
+      table.subjectId,
+    ),
   }),
 );
 

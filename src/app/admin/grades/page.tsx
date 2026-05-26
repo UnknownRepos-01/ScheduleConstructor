@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 
+import { TableRowActions } from "@/components/admin/table-row-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -37,6 +38,11 @@ export default function GradesPage() {
     setEditId(null);
     setShowForm(false);
     setError(null);
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setShowForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,10 +84,7 @@ export default function GradesPage() {
         actions={
           <Button
             variant="primary"
-            onClick={() => {
-              resetForm();
-              setShowForm(true);
-            }}
+            onClick={openCreateForm}
           >
             <AppIcon name="add" className="h-4 w-4" />
             Добавить параллель
@@ -125,10 +128,7 @@ export default function GradesPage() {
             icon="grades"
             title="Параллели пока не добавлены"
             actionLabel="Добавить параллель"
-            onAction={() => {
-              resetForm();
-              setShowForm(true);
-            }}
+            onAction={openCreateForm}
           />
         </Card>
       ) : (
@@ -149,14 +149,7 @@ export default function GradesPage() {
                   <TBodyCell className="font-semibold">{g.number} класс</TBodyCell>
                   <TBodyCell>{g.hours}</TBodyCell>
                   <TBodyCell>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" onClick={() => handleEdit(g)}>
-                        <AppIcon name="edit" className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="danger" onClick={() => handleDelete(g.id)}>
-                        <AppIcon name="delete" className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <TableRowActions onEdit={() => handleEdit(g)} onDelete={() => handleDelete(g.id)} />
                   </TBodyCell>
                 </tr>
               ))}

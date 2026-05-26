@@ -3,10 +3,7 @@ import { NextResponse } from "next/server";
 
 import { db } from "@/db/index";
 import { lessonClassrooms, lessonTeachers, scheduleChanges, schedules } from "@/db/schema";
-import { AdminCheck, getSession } from "@/lib/auth";
-
-const UNAUTHORIZED_MESSAGE = "Требуется авторизация";
-const FORBIDDEN_MESSAGE = "У вас нет прав для выполнения этого действия";
+import { apiErrorResponse, requireAdmin } from "@/lib/api/route-helpers";
 
 const normalizeIds = (value: unknown): number[] => {
   if (!Array.isArray(value)) return [];
@@ -21,9 +18,8 @@ const normalizeIds = (value: unknown): number[] => {
 
 export async function GET(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const { searchParams } = new URL(request.url);
     const listId = searchParams.get("listId");
@@ -53,16 +49,15 @@ export async function GET(request: Request) {
     );
 
     return NextResponse.json(entriesWithRelations);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const body = await request.json();
     const { listId, classId, day, lessonNumber, subjectId } = body;
@@ -166,18 +161,15 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ message: "Ячейка расписания сохранена", scheduleId });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: UNAUTHORIZED_MESSAGE }, { status: 401 });
-    if (!(await AdminCheck(session))) {
-      return NextResponse.json({ error: FORBIDDEN_MESSAGE }, { status: 403 });
-    }
+    const adminError = await requireAdmin();
+    if (adminError) return adminError;
 
     const { searchParams } = new URL(request.url);
     const scheduleIdParam = searchParams.get("scheduleId");
@@ -220,7 +212,7 @@ export async function DELETE(request: Request) {
     ]);
 
     return NextResponse.json({ message: "Ячейка расписания удалена", scheduleId: targetId });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return apiErrorResponse(err);
   }
 }

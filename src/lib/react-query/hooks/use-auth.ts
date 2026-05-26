@@ -5,6 +5,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authService, ChangePasswordPayload, LoginPayload } from "@/lib/api/services/auth.service";
 import { queryKeys } from "@/lib/react-query/query-keys";
 
+const useInvalidateCurrentUser = () => {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser });
+};
+
 export const useCurrentUserQuery = () =>
   useQuery({
     queryKey: queryKeys.auth.currentUser,
@@ -16,24 +21,20 @@ export const useCurrentUserQuery = () =>
   });
 
 export const useLoginMutation = () => {
-  const queryClient = useQueryClient();
+  const invalidateCurrentUser = useInvalidateCurrentUser();
 
   return useMutation({
     mutationFn: (payload: LoginPayload) => authService.login(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser });
-    },
+    onSuccess: invalidateCurrentUser,
   });
 };
 
 export const useLogoutMutation = () => {
-  const queryClient = useQueryClient();
+  const invalidateCurrentUser = useInvalidateCurrentUser();
 
   return useMutation({
     mutationFn: authService.logout,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser });
-    },
+    onSuccess: invalidateCurrentUser,
   });
 };
 

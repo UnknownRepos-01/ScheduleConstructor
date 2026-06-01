@@ -78,7 +78,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
         listId: newListId,
         classId: sourceSchedule.classId,
         subjectId: sourceSchedule.subjectId,
-        teacherId: sourceSchedule.teacherId,
         day: sourceSchedule.day,
         lessonNumber: sourceSchedule.lessonNumber,
       });

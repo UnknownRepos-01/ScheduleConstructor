@@ -6,7 +6,6 @@ import {
   classSubjectTeachers,
   lessonTeachers,
   roles,
-  schedules,
   teacherDefaultClassrooms,
   teacherSubjects,
   users,
@@ -130,12 +129,11 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     const [currentUser] = await db.select({ id: users.id }).from(users).where(eq(users.id, id));
     if (!currentUser) return NextResponse.json({ error: NOT_FOUND_MESSAGE }, { status: 404 });
 
-    const [scheduleEntry] = await db.select({ id: schedules.id }).from(schedules).where(eq(schedules.teacherId, id));
     const [lessonTeacherEntry] = await db
       .select({ id: lessonTeachers.id })
       .from(lessonTeachers)
       .where(eq(lessonTeachers.teacherId, id));
-    if (scheduleEntry || lessonTeacherEntry) {
+    if (lessonTeacherEntry) {
       return NextResponse.json({ error: TEACHER_IN_SCHEDULE_MESSAGE }, { status: 409 });
     }
 

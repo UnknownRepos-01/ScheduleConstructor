@@ -135,7 +135,7 @@ function toResponseEntry(
   return {
     ...entry,
     teacherIds,
-    teacherId: teacherIds[0] ?? entry.teacherId ?? null,
+    teacherId: teacherIds[0] ?? null,
     classroomIds: classroomIdsByScheduleId.get(entry.id) ?? [],
   };
 }
@@ -290,7 +290,7 @@ export async function POST(request: Request) {
           increment(classDayLoad, makeDayKey(entry.classId, entry.day));
         }
 
-        const teacherIds = existingTeachersByScheduleId.get(entry.id) ?? (entry.teacherId ? [entry.teacherId] : []);
+        const teacherIds = existingTeachersByScheduleId.get(entry.id) ?? [];
         teacherIds.forEach((teacherId) => addBusySlot(teacherBusySlots, teacherId, slotKey));
 
         const classroomIds = existingClassroomsByScheduleId.get(entry.id) ?? [];
@@ -436,7 +436,6 @@ export async function POST(request: Request) {
         listId: lesson.listId,
         classId: lesson.classId,
         subjectId: lesson.subjectId,
-        teacherId: lesson.teacherId,
         day: lesson.day,
         lessonNumber: lesson.lessonNumber,
       });
@@ -451,7 +450,6 @@ export async function POST(request: Request) {
         listId,
         classId: lesson.classId,
         subjectId: lesson.subjectId,
-        teacherId: lesson.teacherId,
         day: lesson.day,
         lessonNumber: lesson.lessonNumber,
       });

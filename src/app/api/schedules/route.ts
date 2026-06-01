@@ -42,7 +42,7 @@ export async function GET(request: Request) {
         return {
           ...entry,
           teacherIds,
-          teacherId: teacherIds[0] ?? entry.teacherId ?? null,
+          teacherId: teacherIds[0] ?? null,
           classroomIds: rooms.map((row) => row.classroomId),
         };
       }),
@@ -61,13 +61,16 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const { listId, classId, day, lessonNumber, subjectId } = body;
-    const teacherIds = normalizeIds(body.teacherIds);
-    const classroomIds = normalizeIds(body.classroomIds);
-    const primaryTeacherId =
-      teacherIds[0] ??
-      (body.teacherId === null || body.teacherId === undefined
+    const bodyTeacherId =
+      body.teacherId === null || body.teacherId === undefined
         ? null
-        : Number.parseInt(String(body.teacherId), 10));
+        : Number.parseInt(String(body.teacherId), 10);
+    const teacherIdsFromBody = normalizeIds(body.teacherIds);
+    const teacherIds =
+      teacherIdsFromBody.length > 0 || !bodyTeacherId || Number.isNaN(bodyTeacherId)
+        ? teacherIdsFromBody
+        : [bodyTeacherId];
+    const classroomIds = normalizeIds(body.classroomIds);
 
     if (!listId || !classId || !day || !lessonNumber) {
       return NextResponse.json({ error: "Не заполнены обязательные поля" }, { status: 400 });
@@ -101,10 +104,6 @@ export async function POST(request: Request) {
         changes.push({ field: "subjectId", oldVal: String(old.subjectId ?? ""), newVal: String(subjectId ?? "") });
       }
 
-      if ((old.teacherId ?? null) !== (primaryTeacherId ?? null)) {
-        changes.push({ field: "teacherId", oldVal: String(old.teacherId ?? ""), newVal: String(primaryTeacherId ?? "") });
-      }
-
       if (JSON.stringify(oldTeacherIds) !== JSON.stringify(nextTeacherIds)) {
         changes.push({
           field: "teacherIds",
@@ -117,7 +116,6 @@ export async function POST(request: Request) {
         .update(schedules)
         .set({
           subjectId: subjectId || null,
-          teacherId: primaryTeacherId || null,
         })
         .where(eq(schedules.id, old.id));
 
@@ -138,7 +136,6 @@ export async function POST(request: Request) {
         day,
         lessonNumber,
         subjectId: subjectId || null,
-        teacherId: primaryTeacherId || null,
       });
       scheduleId = result.insertId;
     }

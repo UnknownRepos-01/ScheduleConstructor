@@ -2,12 +2,12 @@
 
 export const roles = mysqlTable("roles", {
   id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
 });
 
 export const statuses = mysqlTable("statuses", {
   id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
 });
 
 export const grades = mysqlTable("grades", {
@@ -73,21 +73,40 @@ export const lists = mysqlTable("lists", {
   isActive: boolean("is_active").default(false).notNull(),
 });
 
-export const schedules = mysqlTable("schedules", {
-  id: int("id").autoincrement().primaryKey(),
-  listId: int("list_id").references(() => lists.id).notNull(),
-  classId: int("class_id").references(() => classes.id).notNull(),
-  subjectId: int("subject_id").references(() => subjects.id),
-  teacherId: int("teacher_id").references(() => users.id),
-  day: int("day").notNull(), // 1=понедельник, 2=вторник, 3=среда, 4=четверг, 5=пятница
-  lessonNumber: int("lesson_number").notNull(), // 1-8
-});
+export const schedules = mysqlTable(
+  "schedules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    listId: int("list_id").references(() => lists.id).notNull(),
+    classId: int("class_id").references(() => classes.id).notNull(),
+    subjectId: int("subject_id").references(() => subjects.id),
+    day: int("day").notNull(), // 1=понедельник, 2=вторник, 3=среда, 4=четверг, 5=пятница
+    lessonNumber: int("lesson_number").notNull(), // 1-8
+  },
+  (table) => ({
+    scheduleCellUnique: uniqueIndex("schedules_list_class_day_lesson_unique").on(
+      table.listId,
+      table.classId,
+      table.day,
+      table.lessonNumber,
+    ),
+  }),
+);
 
-export const lessonClassrooms = mysqlTable("lesson_classrooms", {
-  id: int("id").autoincrement().primaryKey(),
-  classroomId: int("classroom_id").references(() => classrooms.id).notNull(),
-  scheduleId: int("schedule_id").references(() => schedules.id).notNull(),
-});
+export const lessonClassrooms = mysqlTable(
+  "lesson_classrooms",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    classroomId: int("classroom_id").references(() => classrooms.id).notNull(),
+    scheduleId: int("schedule_id").references(() => schedules.id).notNull(),
+  },
+  (table) => ({
+    lessonClassroomUnique: uniqueIndex("lesson_classrooms_schedule_classroom_unique").on(
+      table.scheduleId,
+      table.classroomId,
+    ),
+  }),
+);
 
 export const lessonTeachers = mysqlTable(
   "lesson_teachers",

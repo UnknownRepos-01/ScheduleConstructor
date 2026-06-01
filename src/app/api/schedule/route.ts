@@ -78,7 +78,7 @@ export async function GET() {
       const cls = classById.get(entry.classId);
       const grade = cls ? gradeById.get(cls.gradeId) : null;
       const subject = entry.subjectId ? subjectById.get(entry.subjectId) : null;
-      const teacherIds = teachersByScheduleId.get(entry.id) ?? (entry.teacherId ? [entry.teacherId] : []);
+      const teacherIds = teachersByScheduleId.get(entry.id) ?? [];
       const teacherRows = teacherIds.map((id) => teacherById.get(id)).filter(isDefined);
 
       const teacherNames = teacherRows.map(toTeacherShortName).filter(Boolean);

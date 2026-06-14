@@ -14,10 +14,17 @@ import {
   teacherDefaultClassrooms,
 } from "@/db/schema";
 import { apiErrorResponse, requireAdmin } from "@/lib/api/route-helpers";
+import {
+  calculateLoadImbalance,
+  compareScheduleQuality,
+  countWindows,
+  SCHOOL_DAYS,
+  SCHOOL_LESSONS,
+  type ScheduleQuality,
+} from "@/lib/schedule-quality";
 
-const DAYS = [1, 2, 3, 4, 5] as const;
-const LESSONS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
-const GAP_SCORE_WEIGHT = 100_000;
+const DAYS = SCHOOL_DAYS;
+const LESSONS = SCHOOL_LESSONS;
 
 type ScheduleEntry = typeof schedules.$inferSelect;
 
@@ -40,7 +47,7 @@ type LessonRequest = {
 type SlotCandidate = {
   day: number;
   lessonNumber: number;
-  score: number;
+  quality: ScheduleQuality;
   subjectCountInDay: number;
   isConsecutive: boolean;
   classGapDelta: number;
@@ -102,10 +109,11 @@ const countDayGaps = (busySlots: Set<string> | undefined, day: number, addedLess
   const occupiedLessons = LESSONS.filter(
     (lessonNumber) => lessonNumber === addedLessonNumber || busySlots?.has(makeSlotKey(day, lessonNumber)),
   );
-  if (occupiedLessons.length < 2) return 0;
-
-  return occupiedLessons[occupiedLessons.length - 1] - occupiedLessons[0] + 1 - occupiedLessons.length;
+  return countWindows(occupiedLessons);
 };
+
+const getDailyLoads = (loadMap: Map<string, number>, makeKey: (day: number) => string) =>
+  DAYS.map((day) => loadMap.get(makeKey(day)) ?? 0);
 
 const createBalancedRequests = (plans: { subjectId: number; missingHours: number; hoursPerWeek: number }[]) => {
   const requests: LessonRequest[] = [];
@@ -173,7 +181,6 @@ function findBestSlot({
   subjectDayLoad: Map<string, number>;
   classSubjectByDaySlot: Map<string, number>;
 }): SlotCandidate | null {
-  const maxSubjectLessonsPerDay = Math.max(1, Math.ceil(request.subjectHoursPerWeek / DAYS.length));
   const candidates: SlotCandidate[] = [];
 
   for (const day of DAYS) {
@@ -186,7 +193,6 @@ function findBestSlot({
       const subjectCountInDay = subjectDayLoad.get(makeSubjectDayKey(request.classId, request.subjectId, day)) ?? 0;
       const classLessonsInDay = classDayLoad.get(makeDayKey(request.classId, day)) ?? 0;
       const isConsecutive = hasConsecutiveSubject(classSubjectByDaySlot, request, day, lessonNumber);
-      const overDailySubjectTarget = Math.max(0, subjectCountInDay + 1 - maxSubjectLessonsPerDay);
       const classSlots = classBusySlots.get(request.classId);
       const teacherSlots = teacherBusySlots.get(teacherId);
       const classGapDelta =
@@ -195,6 +201,15 @@ function findBestSlot({
       const teacherGapDelta =
         countDayGaps(teacherSlots, day, lessonNumber) -
         countDayGaps(teacherSlots, day);
+      const classLoads = getDailyLoads(classDayLoad, (loadDay) => makeDayKey(request.classId, loadDay));
+      const subjectLoads = getDailyLoads(
+        subjectDayLoad,
+        (loadDay) => makeSubjectDayKey(request.classId, request.subjectId, loadDay),
+      );
+      const currentDistributionPenalty =
+        calculateLoadImbalance(classLoads) + calculateLoadImbalance(subjectLoads);
+      classLoads[day - 1] += 1;
+      subjectLoads[day - 1] += 1;
 
       candidates.push({
         day,
@@ -203,23 +218,24 @@ function findBestSlot({
         isConsecutive,
         classGapDelta,
         teacherGapDelta,
-        score:
-          (classGapDelta + teacherGapDelta) * GAP_SCORE_WEIGHT +
-          subjectCountInDay * 1000 +
-          overDailySubjectTarget * 2000 +
-          (isConsecutive ? -600 : 0) +
-          classLessonsInDay * 80 +
-          lessonNumber,
+        quality: {
+          gapPenalty: classGapDelta * 2 + teacherGapDelta,
+          classGaps: classGapDelta,
+          teacherGaps: teacherGapDelta,
+          distributionPenalty:
+            calculateLoadImbalance(classLoads) +
+            calculateLoadImbalance(subjectLoads) -
+            currentDistributionPenalty,
+          repeatedSubjectsPenalty: subjectCountInDay,
+          secondaryPenalty: (isConsecutive ? 100 : 0) + classLessonsInDay * 10 + lessonNumber,
+        },
       });
     }
   }
 
   return candidates.sort(
     (left, right) =>
-      left.score - right.score ||
-      left.classGapDelta + left.teacherGapDelta - (right.classGapDelta + right.teacherGapDelta) ||
-      left.classGapDelta - right.classGapDelta ||
-      left.teacherGapDelta - right.teacherGapDelta ||
+      compareScheduleQuality(left.quality, right.quality) ||
       left.subjectCountInDay - right.subjectCountInDay ||
       left.day - right.day ||
       left.lessonNumber - right.lessonNumber,

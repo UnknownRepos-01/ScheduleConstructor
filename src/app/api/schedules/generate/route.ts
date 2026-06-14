@@ -17,6 +17,7 @@ import { apiErrorResponse, requireAdmin } from "@/lib/api/route-helpers";
 
 const DAYS = [1, 2, 3, 4, 5] as const;
 const LESSONS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+const GAP_SCORE_WEIGHT = 100_000;
 
 type ScheduleEntry = typeof schedules.$inferSelect;
 
@@ -42,7 +43,8 @@ type SlotCandidate = {
   score: number;
   subjectCountInDay: number;
   isConsecutive: boolean;
-  gapDelta: number;
+  classGapDelta: number;
+  teacherGapDelta: number;
 };
 
 const makeSlotKey = (day: number, lessonNumber: number) => `${day}:${lessonNumber}`;
@@ -96,7 +98,7 @@ const hasConsecutiveSubject = (
   classSubjectByDaySlot.get(`${request.classId}:${day}:${lessonNumber - 1}`) === request.subjectId ||
   classSubjectByDaySlot.get(`${request.classId}:${day}:${lessonNumber + 1}`) === request.subjectId;
 
-const countClassDayGaps = (busySlots: Set<string> | undefined, day: number, addedLessonNumber?: number) => {
+const countDayGaps = (busySlots: Set<string> | undefined, day: number, addedLessonNumber?: number) => {
   const occupiedLessons = LESSONS.filter(
     (lessonNumber) => lessonNumber === addedLessonNumber || busySlots?.has(makeSlotKey(day, lessonNumber)),
   );
@@ -186,18 +188,23 @@ function findBestSlot({
       const isConsecutive = hasConsecutiveSubject(classSubjectByDaySlot, request, day, lessonNumber);
       const overDailySubjectTarget = Math.max(0, subjectCountInDay + 1 - maxSubjectLessonsPerDay);
       const classSlots = classBusySlots.get(request.classId);
-      const gapDelta =
-        countClassDayGaps(classSlots, day, lessonNumber) -
-        countClassDayGaps(classSlots, day);
+      const teacherSlots = teacherBusySlots.get(teacherId);
+      const classGapDelta =
+        countDayGaps(classSlots, day, lessonNumber) -
+        countDayGaps(classSlots, day);
+      const teacherGapDelta =
+        countDayGaps(teacherSlots, day, lessonNumber) -
+        countDayGaps(teacherSlots, day);
 
       candidates.push({
         day,
         lessonNumber,
         subjectCountInDay,
         isConsecutive,
-        gapDelta,
+        classGapDelta,
+        teacherGapDelta,
         score:
-          gapDelta * 4000 +
+          (classGapDelta + teacherGapDelta) * GAP_SCORE_WEIGHT +
           subjectCountInDay * 1000 +
           overDailySubjectTarget * 2000 +
           (isConsecutive ? -600 : 0) +
@@ -210,7 +217,9 @@ function findBestSlot({
   return candidates.sort(
     (left, right) =>
       left.score - right.score ||
-      left.gapDelta - right.gapDelta ||
+      left.classGapDelta + left.teacherGapDelta - (right.classGapDelta + right.teacherGapDelta) ||
+      left.classGapDelta - right.classGapDelta ||
+      left.teacherGapDelta - right.teacherGapDelta ||
       left.subjectCountInDay - right.subjectCountInDay ||
       left.day - right.day ||
       left.lessonNumber - right.lessonNumber,

@@ -42,6 +42,7 @@ type SlotCandidate = {
   score: number;
   subjectCountInDay: number;
   isConsecutive: boolean;
+  gapDelta: number;
 };
 
 const makeSlotKey = (day: number, lessonNumber: number) => `${day}:${lessonNumber}`;
@@ -94,6 +95,15 @@ const hasConsecutiveSubject = (
 ) =>
   classSubjectByDaySlot.get(`${request.classId}:${day}:${lessonNumber - 1}`) === request.subjectId ||
   classSubjectByDaySlot.get(`${request.classId}:${day}:${lessonNumber + 1}`) === request.subjectId;
+
+const countClassDayGaps = (busySlots: Set<string> | undefined, day: number, addedLessonNumber?: number) => {
+  const occupiedLessons = LESSONS.filter(
+    (lessonNumber) => lessonNumber === addedLessonNumber || busySlots?.has(makeSlotKey(day, lessonNumber)),
+  );
+  if (occupiedLessons.length < 2) return 0;
+
+  return occupiedLessons[occupiedLessons.length - 1] - occupiedLessons[0] + 1 - occupiedLessons.length;
+};
 
 const createBalancedRequests = (plans: { subjectId: number; missingHours: number; hoursPerWeek: number }[]) => {
   const requests: LessonRequest[] = [];
@@ -175,13 +185,19 @@ function findBestSlot({
       const classLessonsInDay = classDayLoad.get(makeDayKey(request.classId, day)) ?? 0;
       const isConsecutive = hasConsecutiveSubject(classSubjectByDaySlot, request, day, lessonNumber);
       const overDailySubjectTarget = Math.max(0, subjectCountInDay + 1 - maxSubjectLessonsPerDay);
+      const classSlots = classBusySlots.get(request.classId);
+      const gapDelta =
+        countClassDayGaps(classSlots, day, lessonNumber) -
+        countClassDayGaps(classSlots, day);
 
       candidates.push({
         day,
         lessonNumber,
         subjectCountInDay,
         isConsecutive,
+        gapDelta,
         score:
+          gapDelta * 4000 +
           subjectCountInDay * 1000 +
           overDailySubjectTarget * 2000 +
           (isConsecutive ? -600 : 0) +
@@ -194,6 +210,7 @@ function findBestSlot({
   return candidates.sort(
     (left, right) =>
       left.score - right.score ||
+      left.gapDelta - right.gapDelta ||
       left.subjectCountInDay - right.subjectCountInDay ||
       left.day - right.day ||
       left.lessonNumber - right.lessonNumber,

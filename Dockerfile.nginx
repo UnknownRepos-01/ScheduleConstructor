@@ -1,4 +1,4 @@
 FROM nginx:1.27-alpine
 
-# Custom production reverse proxy config
+
 COPY nginx.conf /etc/nginx/nginx.conf
